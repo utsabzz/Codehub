@@ -79,3 +79,23 @@ function getTypeColor($type) {
     return $colors[$type] ?? 'gray';
 }
 ?>
+
+// Add this function to repository_helper.php
+function getLanguageColorCode($language) {
+    $colors = [
+        'PHP' => '#787CB5',
+        'JavaScript' => '#F7DF1E',
+        'Python' => '#3776AB',
+        'Java' => '#ED8B00',
+        'HTML' => '#E34F26',
+        'CSS' => '#1572B6',
+        'TypeScript' => '#3178C6',
+        'C++' => '#00599C',
+        'C' => '#555555',
+        'Ruby' => '#CC342D',
+        'Go' => '#00ADD8',
+        'Rust' => '#000000',
+        'SQL' => '#336791'
+    ];
+    return $colors[$language] ?? '#6B7280';
+}

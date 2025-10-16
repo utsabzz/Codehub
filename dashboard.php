@@ -431,7 +431,7 @@ $conn->close();
                     <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent Repositories</h3>
                     <div class="space-y-1">
                         <?php foreach ($repositories as $repo): ?>
-                        <a href="repository.php?id=<?php echo $repo['id']; ?>" class="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+                        <a href="view_repo.php?id=<?php echo $repo['id']; ?>" class="flex items-center space-x-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
                             <i class="fas fa-<?php echo $repo['visibility'] === 'private' ? 'lock' : 'book'; ?> text-gray-400"></i>
                             <span><?php echo $repo['name']; ?></span>
                         </a>
@@ -517,7 +517,7 @@ $conn->close();
                                             <div class="flex-1">
                                                 <div class="flex items-center space-x-2 mb-2">
                                                     <i class="fas fa-<?php echo $repo['visibility'] === 'private' ? 'lock' : 'book'; ?> text-gray-400"></i>
-                                                    <a href="repository.php?id=<?php echo $repo['id']; ?>" class="font-semibold text-blue-600 hover:underline"><?php echo $repo['name']; ?></a>
+                                                    <a href="view_repo.php?id=<?php echo $repo['id']; ?>" class="font-semibold text-blue-600 hover:underline"><?php echo $repo['name']; ?></a>
                                                     <span class="px-2 py-1 text-xs bg-<?php echo $repo['visibility'] === 'private' ? 'gray' : 'green'; ?>-100 text-<?php echo $repo['visibility'] === 'private' ? 'gray' : 'green'; ?>-700 rounded-full"><?php echo ucfirst($repo['visibility']); ?></span>
                                                     <span class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-full"><?php echo $repo['default_branch']; ?></span>
                                                 </div>
