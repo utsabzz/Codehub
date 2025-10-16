@@ -28,6 +28,7 @@ if ($result->num_rows === 0) {
 }
 
  $user = $result->fetch_assoc();
+ $username = $user['username'];
 
 // Get user statistics
  $repos_count = 0;
@@ -35,9 +36,9 @@ if ($result->num_rows === 0) {
  $following_count = 0;
 
 // Count repositories
- $sql = "SELECT COUNT(*) as count FROM repositories WHERE owner_id = ?";
+ $sql = "SELECT COUNT(*) as count FROM repositories WHERE owner_username = ?";
  $stmt = $conn->prepare($sql);
- $stmt->bind_param("i", $user_id);
+ $stmt->bind_param("s", $username);
  $stmt->execute();
  $result = $stmt->get_result();
  $repos_count = $result->fetch_assoc()['count'];
@@ -45,9 +46,9 @@ if ($result->num_rows === 0) {
 // Count stars received
  $sql = "SELECT COUNT(*) as count FROM repository_stars rs 
         JOIN repositories r ON rs.repository_id = r.id 
-        WHERE r.owner_id = ?";
+        WHERE r.owner_username = ?";
  $stmt = $conn->prepare($sql);
- $stmt->bind_param("i", $user_id);
+ $stmt->bind_param("s", $username);
  $stmt->execute();
  $result = $stmt->get_result();
  $stars_count = $result->fetch_assoc()['count'];
@@ -65,11 +66,11 @@ if ($result->num_rows === 0) {
         (SELECT COUNT(*) FROM repository_stars WHERE repository_id = r.id) as stars,
         (SELECT COUNT(*) FROM repository_forks WHERE source_repository_id = r.id) as forks
         FROM repositories r 
-        WHERE r.owner_id = ? 
+        WHERE r.owner_username = ? 
         ORDER BY r.updated_at DESC 
         LIMIT 5";
  $stmt = $conn->prepare($sql);
- $stmt->bind_param("i", $user_id);
+ $stmt->bind_param("s", $username);
  $stmt->execute();
  $result = $stmt->get_result();
  $repositories = [];
@@ -105,11 +106,11 @@ while ($row = $result->fetch_assoc()) {
  $sql = "SELECT pr.*, r.name as repo_name 
         FROM pull_requests pr 
         JOIN repositories r ON pr.repository_id = r.id 
-        WHERE r.owner_id = ? 
+        WHERE r.owner_username = ? 
         ORDER BY pr.updated_at DESC 
         LIMIT 3";
  $stmt = $conn->prepare($sql);
- $stmt->bind_param("i", $user_id);
+ $stmt->bind_param("s", $username);
  $stmt->execute();
  $result = $stmt->get_result();
  $pull_requests = [];
@@ -122,11 +123,11 @@ while ($row = $result->fetch_assoc()) {
  $sql = "SELECT i.*, r.name as repo_name 
         FROM issues i 
         JOIN repositories r ON i.repository_id = r.id 
-        WHERE r.owner_id = ? 
+        WHERE r.owner_username = ? 
         ORDER BY i.updated_at DESC 
         LIMIT 3";
  $stmt = $conn->prepare($sql);
- $stmt->bind_param("i", $user_id);
+ $stmt->bind_param("s", $username);
  $stmt->execute();
  $result = $stmt->get_result();
  $issues = [];
