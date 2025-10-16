@@ -13,12 +13,12 @@ require_once 'db_connection.php';
 require_once 'repository_helper.php';
 
 // Get user information
- $user_id = $_SESSION['user_id'];
- $sql = "SELECT id, username, email, first_name, last_name, profile_image FROM users WHERE id = ?";
- $stmt = $conn->prepare($sql);
- $stmt->bind_param("i", $user_id);
- $stmt->execute();
- $result = $stmt->get_result();
+$user_id = $_SESSION['user_id'];
+$sql = "SELECT id, username, email, profile_image FROM users WHERE id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
 if ($result->num_rows === 0) {
     // User not found, redirect to login
@@ -27,57 +27,58 @@ if ($result->num_rows === 0) {
     exit;
 }
 
- $user = $result->fetch_assoc();
- $username = $user['username'];
+$user = $result->fetch_assoc();
+$username = $user['username'];
 
 // Get user statistics
- $repos_count = 0;
- $stars_count = 0;
- $following_count = 0;
+$repos_count = 0;
+$stars_count = 0;
+$following_count = 0;
 
 // Count repositories
- $sql = "SELECT COUNT(*) as count FROM repositories WHERE owner_username = ?";
- $stmt = $conn->prepare($sql);
- $stmt->bind_param("s", $username);
- $stmt->execute();
- $result = $stmt->get_result();
- $repos_count = $result->fetch_assoc()['count'];
+$sql = "SELECT COUNT(*) as count FROM repositories WHERE owner_username = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $username);
+$stmt->execute();
+$result = $stmt->get_result();
+$repos_count = $result->fetch_assoc()['count'];
 
 // Count stars received
- $sql = "SELECT COUNT(*) as count FROM repository_stars rs 
+$sql = "SELECT COUNT(*) as count FROM repository_stars rs 
         JOIN repositories r ON rs.repository_id = r.id 
         WHERE r.owner_username = ?";
- $stmt = $conn->prepare($sql);
- $stmt->bind_param("s", $username);
- $stmt->execute();
- $result = $stmt->get_result();
- $stars_count = $result->fetch_assoc()['count'];
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $username);
+$stmt->execute();
+$result = $stmt->get_result();
+$stars_count = $result->fetch_assoc()['count'];
 
 // Count following
- $sql = "SELECT COUNT(*) as count FROM user_following WHERE follower_id = ?";
- $stmt = $conn->prepare($sql);
- $stmt->bind_param("i", $user_id);
- $stmt->execute();
- $result = $stmt->get_result();
- $following_count = $result->fetch_assoc()['count'];
+$sql = "SELECT COUNT(*) as count FROM user_following WHERE follower_id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+$following_count = $result->fetch_assoc()['count'];
 
-// Get user's repositories
- $sql = "SELECT r.*, 
+// Get user's repositories - FIXED: Show all repositories even if directory doesn't exist
+$sql = "SELECT r.*, 
         (SELECT COUNT(*) FROM repository_stars WHERE repository_id = r.id) as stars,
         (SELECT COUNT(*) FROM repository_forks WHERE source_repository_id = r.id) as forks
         FROM repositories r 
         WHERE r.owner_username = ? 
         ORDER BY r.updated_at DESC 
         LIMIT 5";
- $stmt = $conn->prepare($sql);
- $stmt->bind_param("s", $username);
- $stmt->execute();
- $result = $stmt->get_result();
- $repositories = [];
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $username);
+$stmt->execute();
+$result = $stmt->get_result();
+$repositories = [];
 
 while ($row = $result->fetch_assoc()) {
-    // Check if repository exists in filesystem
-    $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/' . $row['path'];
+    // Check if repository exists in filesystem - FIXED PATH
+    $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $row['path'];
+    
     if (is_dir($fullPath)) {
         // Get last modified time from filesystem
         $row['last_commit_date'] = date('Y-m-d H:i:s', filemtime($fullPath));
@@ -97,47 +98,50 @@ while ($row = $result->fetch_assoc()) {
                 }
             }
         }
-        
-        $repositories[] = $row;
+    } else {
+        // If directory doesn't exist, use database updated_at
+        $row['last_commit_date'] = $row['updated_at'];
     }
+    
+    $repositories[] = $row;
 }
 
 // Get pull requests
- $sql = "SELECT pr.*, r.name as repo_name 
+$sql = "SELECT pr.*, r.name as repo_name 
         FROM pull_requests pr 
         JOIN repositories r ON pr.repository_id = r.id 
         WHERE r.owner_username = ? 
         ORDER BY pr.updated_at DESC 
         LIMIT 3";
- $stmt = $conn->prepare($sql);
- $stmt->bind_param("s", $username);
- $stmt->execute();
- $result = $stmt->get_result();
- $pull_requests = [];
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $username);
+$stmt->execute();
+$result = $stmt->get_result();
+$pull_requests = [];
 
 while ($row = $result->fetch_assoc()) {
     $pull_requests[] = $row;
 }
 
 // Get issues
- $sql = "SELECT i.*, r.name as repo_name 
+$sql = "SELECT i.*, r.name as repo_name 
         FROM issues i 
         JOIN repositories r ON i.repository_id = r.id 
         WHERE r.owner_username = ? 
         ORDER BY i.updated_at DESC 
         LIMIT 3";
- $stmt = $conn->prepare($sql);
- $stmt->bind_param("s", $username);
- $stmt->execute();
- $result = $stmt->get_result();
- $issues = [];
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $username);
+$stmt->execute();
+$result = $stmt->get_result();
+$issues = [];
 
 while ($row = $result->fetch_assoc()) {
     $issues[] = $row;
 }
 
 // Close connection
- $conn->close();
+$conn->close();
 ?>
 
 <!DOCTYPE html>
@@ -350,7 +354,7 @@ while ($row = $result->fetch_assoc()) {
                 <div class="flex items-center space-x-3 mb-6 p-3 bg-gray-50 rounded-lg">
                     <img src="<?php echo !empty($user['profile_image']) ? $user['profile_image'] : 'https://picsum.photos/seed/user' . $user['id'] . '/40/40.jpg'; ?>" alt="User" class="h-10 w-10 rounded-full">
                     <div>
-                        <p class="font-semibold text-gray-900"><?php echo !empty($user['first_name']) ? $user['first_name'] . ' ' . $user['last_name'] : $user['username']; ?></p>
+                        <p class="font-semibold text-gray-900"><?php echo $user['username']; ?></p>
                         <p class="text-xs text-gray-600">@<?php echo $user['username']; ?></p>
                     </div>
                 </div>
@@ -393,7 +397,7 @@ while ($row = $result->fetch_assoc()) {
                         <span class="ml-auto bg-orange-500 text-white text-xs px-2 py-1 rounded-full"><?php echo count($pull_requests); ?></span>
                     </a>
                     <a href="#" class="sidebar-item flex items-center space-x-3 px-3 py-2 text-gray-700 rounded-lg">
-                        <i class="fas fa-discussions text-gray-500"></i>
+                        <i class="fas fa-comments text-gray-500"></i>
                         <span>Discussions</span>
                     </a>
                     <a href="#" class="sidebar-item flex items-center space-x-3 px-3 py-2 text-gray-700 rounded-lg">
@@ -445,7 +449,7 @@ while ($row = $result->fetch_assoc()) {
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <!-- Welcome Section -->
                 <div class="mb-8">
-                    <h1 class="text-3xl font-bold text-gray-900 mb-2">Welcome back, <?php echo !empty($user['first_name']) ? $user['first_name'] : $user['username']; ?>! 👋</h1>
+                    <h1 class="text-3xl font-bold text-gray-900 mb-2">Welcome back, <?php echo $user['username']; ?>! 👋</h1>
                     <p class="text-gray-600">Here's what's happening with your repositories today.</p>
                 </div>
                 
@@ -496,44 +500,57 @@ while ($row = $result->fetch_assoc()) {
                             </div>
                             
                             <div class="space-y-4">
-                                <?php foreach ($repositories as $repo): ?>
-                                <!-- Repository Card -->
-                                <div class="repo-card bg-white rounded-lg border border-gray-200 p-4">
-                                    <div class="flex items-start justify-between">
-                                        <div class="flex-1">
-                                            <div class="flex items-center space-x-2 mb-2">
-                                                <i class="fas fa-<?php echo $repo['visibility'] === 'private' ? 'lock' : 'book'; ?> text-gray-400"></i>
-                                                <a href="repository.php?id=<?php echo $repo['id']; ?>" class="font-semibold text-blue-600 hover:underline"><?php echo $repo['name']; ?></a>
-                                                <span class="px-2 py-1 text-xs bg-<?php echo $repo['visibility'] === 'private' ? 'gray' : 'green'; ?>-100 text-<?php echo $repo['visibility'] === 'private' ? 'gray' : 'green'; ?>-700 rounded-full"><?php echo ucfirst($repo['visibility']); ?></span>
-                                                <span class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-full"><?php echo $repo['default_branch']; ?></span>
-                                            </div>
-                                            <p class="text-sm text-gray-600 mb-3"><?php echo $repo['description']; ?></p>
-                                            <div class="flex items-center space-x-4 text-sm text-gray-500">
-                                                <span class="flex items-center">
-                                                    <i class="fas fa-circle text-<?php echo getLanguageColor($repo['language']); ?> text-xs mr-1 pulse-dot"></i>
-                                                    <?php echo $repo['language']; ?>
-                                                </span>
-                                                <span class="flex items-center">
-                                                    <i class="fas fa-star text-yellow-500 mr-1"></i>
-                                                    <?php echo $repo['stars']; ?>
-                                                </span>
-                                                <span class="flex items-center">
-                                                    <i class="fas fa-code-branch mr-1"></i>
-                                                    <?php echo $repo['forks']; ?>
-                                                </span>
-                                                <span class="flex items-center">
-                                                    <i class="fas fa-eye mr-1"></i>
-                                                    <?php echo $repo['views']; ?>
-                                                </span>
-                                                <span>Updated <?php echo getTimeAgo($repo['last_commit_date']); ?></span>
-                                            </div>
-                                        </div>
-                                        <button class="text-gray-400 hover:text-gray-600">
-                                            <i class="fas fa-ellipsis-v"></i>
+                                <?php if (empty($repositories)): ?>
+                                    <div class="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                                        <i class="fas fa-folder-open text-4xl text-gray-300 mb-4"></i>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-2">No repositories yet</h3>
+                                        <p class="text-gray-600 mb-4">Get started by creating your first repository.</p>
+                                        <button onclick="window.location.href='create_repository.php'" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                            Create repository
                                         </button>
                                     </div>
-                                </div>
-                                <?php endforeach; ?>
+                                <?php else: ?>
+                                    <?php foreach ($repositories as $repo): ?>
+                                    <!-- Repository Card -->
+                                    <div class="repo-card bg-white rounded-lg border border-gray-200 p-4">
+                                        <div class="flex items-start justify-between">
+                                            <div class="flex-1">
+                                                <div class="flex items-center space-x-2 mb-2">
+                                                    <i class="fas fa-<?php echo $repo['visibility'] === 'private' ? 'lock' : 'book'; ?> text-gray-400"></i>
+                                                    <a href="repository.php?id=<?php echo $repo['id']; ?>" class="font-semibold text-blue-600 hover:underline"><?php echo $repo['name']; ?></a>
+                                                    <span class="px-2 py-1 text-xs bg-<?php echo $repo['visibility'] === 'private' ? 'gray' : 'green'; ?>-100 text-<?php echo $repo['visibility'] === 'private' ? 'gray' : 'green'; ?>-700 rounded-full"><?php echo ucfirst($repo['visibility']); ?></span>
+                                                    <span class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-full"><?php echo $repo['default_branch']; ?></span>
+                                                </div>
+                                                <p class="text-sm text-gray-600 mb-3"><?php echo !empty($repo['description']) ? $repo['description'] : 'No description provided'; ?></p>
+                                                <div class="flex items-center space-x-4 text-sm text-gray-500">
+                                                    <?php if (!empty($repo['language'])): ?>
+                                                    <span class="flex items-center">
+                                                        <i class="fas fa-circle text-<?php echo getLanguageColor($repo['language']); ?> text-xs mr-1 pulse-dot"></i>
+                                                        <?php echo $repo['language']; ?>
+                                                    </span>
+                                                    <?php endif; ?>
+                                                    <span class="flex items-center">
+                                                        <i class="fas fa-star text-yellow-500 mr-1"></i>
+                                                        <?php echo $repo['stars']; ?>
+                                                    </span>
+                                                    <span class="flex items-center">
+                                                        <i class="fas fa-code-branch mr-1"></i>
+                                                        <?php echo $repo['forks']; ?>
+                                                    </span>
+                                                    <span class="flex items-center">
+                                                        <i class="fas fa-eye mr-1"></i>
+                                                        <?php echo $repo['views']; ?>
+                                                    </span>
+                                                    <span>Updated <?php echo getTimeAgo($repo['last_commit_date']); ?></span>
+                                                </div>
+                                            </div>
+                                            <button class="text-gray-400 hover:text-gray-600">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
                         </section>
                     </div>
@@ -579,16 +596,20 @@ while ($row = $result->fetch_assoc()) {
                             </div>
                             
                             <div class="space-y-3">
-                                <?php foreach ($pull_requests as $pr): ?>
-                                <div class="p-3 bg-<?php echo getStatusColor($pr['status']); ?>-50 border border-<?php echo getStatusColor($pr['status']); ?>-200 rounded-lg">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-xs font-semibold text-<?php echo getStatusColor($pr['status']); ?>-700"><?php echo getStatusText($pr['status']); ?></span>
-                                        <span class="text-xs text-gray-500"><?php echo getTimeAgo($pr['updated_at']); ?></span>
+                                <?php if (empty($pull_requests)): ?>
+                                    <p class="text-sm text-gray-500 text-center">No pull requests</p>
+                                <?php else: ?>
+                                    <?php foreach ($pull_requests as $pr): ?>
+                                    <div class="p-3 bg-<?php echo getStatusColor($pr['status']); ?>-50 border border-<?php echo getStatusColor($pr['status']); ?>-200 rounded-lg">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-xs font-semibold text-<?php echo getStatusColor($pr['status']); ?>-700"><?php echo getStatusText($pr['status']); ?></span>
+                                            <span class="text-xs text-gray-500"><?php echo getTimeAgo($pr['updated_at']); ?></span>
+                                        </div>
+                                        <p class="text-sm font-medium text-gray-900 mb-1"><?php echo $pr['title']; ?></p>
+                                        <p class="text-xs text-gray-600"><?php echo $pr['repo_name']; ?></p>
                                     </div>
-                                    <p class="text-sm font-medium text-gray-900 mb-1"><?php echo $pr['title']; ?></p>
-                                    <p class="text-xs text-gray-600"><?php echo $pr['repo_name']; ?></p>
-                                </div>
-                                <?php endforeach; ?>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
                         </section>
                         
@@ -600,16 +621,20 @@ while ($row = $result->fetch_assoc()) {
                             </div>
                             
                             <div class="space-y-3">
-                                <?php foreach ($issues as $issue): ?>
-                                <div class="p-3 bg-<?php echo getTypeColor($issue['type']); ?>-50 border border-<?php echo getTypeColor($issue['type']); ?>-200 rounded-lg">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-xs font-semibold text-<?php echo getTypeColor($issue['type']); ?>-700"><?php echo strtoupper($issue['type']); ?></span>
-                                        <span class="text-xs text-gray-500"><?php echo getTimeAgo($issue['updated_at']); ?></span>
+                                <?php if (empty($issues)): ?>
+                                    <p class="text-sm text-gray-500 text-center">No issues</p>
+                                <?php else: ?>
+                                    <?php foreach ($issues as $issue): ?>
+                                    <div class="p-3 bg-<?php echo getTypeColor($issue['type']); ?>-50 border border-<?php echo getTypeColor($issue['type']); ?>-200 rounded-lg">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-xs font-semibold text-<?php echo getTypeColor($issue['type']); ?>-700"><?php echo strtoupper($issue['type']); ?></span>
+                                            <span class="text-xs text-gray-500"><?php echo getTimeAgo($issue['updated_at']); ?></span>
+                                        </div>
+                                        <p class="text-sm font-medium text-gray-900 mb-1"><?php echo $issue['title']; ?></p>
+                                        <p class="text-xs text-gray-600"><?php echo $issue['repo_name']; ?></p>
                                     </div>
-                                    <p class="text-sm font-medium text-gray-900 mb-1"><?php echo $issue['title']; ?></p>
-                                    <p class="text-xs text-gray-600"><?php echo $issue['repo_name']; ?></p>
-                                </div>
-                                <?php endforeach; ?>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
                         </section>
                         
