@@ -825,7 +825,7 @@ $conn->close();
                     </div>
                     <nav class="hidden md:flex space-x-6">
                         <a href="dashboard.php" class="text-gray-700 hover:text-gray-900 hover-underline">Dashboard</a>
-                        <a href="#" class="text-gray-700 hover:text-gray-900 hover-underline">Pull requests</a>
+                        <a href="comit.php" class="text-gray-700 hover:text-gray-900 hover-underline">Comit History</a>
                         <a href="#" class="text-gray-700 hover:text-gray-900 hover-underline">Issues</a>
                         <a href="#" class="text-gray-700 hover:text-gray-900 hover-underline">Explore</a>
                     </nav>
@@ -870,7 +870,7 @@ $conn->close();
                                 <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Your
                                     stars</a>
                                 <hr class="my-2">
-                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
+                                <a href="project_settings.php?id=<?php echo $repo['id']; ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Settings</a>
                                 <a href="backend/logout.php"
                                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sign out</a>
                             </div>
@@ -1099,12 +1099,12 @@ $conn->close();
                 <div class="flex space-x-8">
                     <a href="#" class="py-4 px-1 text-sm font-medium tab-active">Code</a>
                     <a href="#" class="py-4 px-1 text-sm font-medium text-gray-600 hover:text-gray-900">Issues</a>
-                    <a href="#" class="py-4 px-1 text-sm font-medium text-gray-600 hover:text-gray-900">Pull requests</a>
+                    <a href="comit.php" class="py-4 px-1 text-sm font-medium text-gray-600 hover:text-gray-900">Comit History</a>
                     <a href="#" class="py-4 px-1 text-sm font-medium text-gray-600 hover:text-gray-900">Actions</a>
                     <a href="#" class="py-4 px-1 text-sm font-medium text-gray-600 hover:text-gray-900">Projects</a>
                     <a href="#" class="py-4 px-1 text-sm font-medium text-gray-600 hover:text-gray-900">Security</a>
                     <a href="#" class="py-4 px-1 text-sm font-medium text-gray-600 hover:text-gray-900">Insights</a>
-                    <a href="#" class="py-4 px-1 text-sm font-medium text-gray-600 hover:text-gray-900">Settings</a>
+                    <a href="project_settings.php?id=<?php echo $repo['id']; ?>" class="py-4 px-1 text-sm font-medium text-gray-600 hover:text-gray-900">Settings</a>
                 </div>
             </div>
         </div>
