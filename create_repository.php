@@ -109,6 +109,37 @@ if ($result->num_rows === 0) {
         .scrollbar-thin::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+        
+        .file-preview {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 8px;
+        }
+        
+        .file-preview pre {
+            margin: 0;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .image-preview {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+        }
+        
+        .pdf-preview {
+            width: 100%;
+            height: 200px;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -411,18 +442,29 @@ if ($result->num_rows === 0) {
             fileItem.className = 'file-item flex items-center justify-between p-2 bg-gray-50 rounded';
             
             const fileInfo = document.createElement('div');
-            fileInfo.className = 'flex items-center';
+            fileInfo.className = 'flex items-center flex-1';
             
             const fileIcon = document.createElement('i');
             fileIcon.className = getFileIcon(file.name);
             
             const fileName = document.createElement('span');
-            fileName.className = 'ml-2 text-sm text-gray-700';
+            fileName.className = 'ml-2 text-sm text-gray-700 truncate';
             fileName.textContent = file.name;
+            fileName.title = file.name;
             
             const fileSize = document.createElement('span');
             fileSize.className = 'ml-2 text-xs text-gray-500';
             fileSize.textContent = formatFileSize(file.size);
+            
+            const filePreview = document.createElement('div');
+            filePreview.className = 'hidden mt-2 file-preview';
+            
+            const previewBtn = document.createElement('button');
+            previewBtn.className = 'text-xs text-blue-600 hover:text-blue-700';
+            previewBtn.innerHTML = '<i class="fas fa-eye mr-1"></i>Preview';
+            previewBtn.addEventListener('click', function() {
+                showFilePreview(file, filePreview);
+            });
             
             const removeBtn = document.createElement('button');
             removeBtn.className = 'text-red-500 hover:text-red-700';
@@ -441,11 +483,64 @@ if ($result->num_rows === 0) {
             fileInfo.appendChild(fileIcon);
             fileInfo.appendChild(fileName);
             fileInfo.appendChild(fileSize);
+            fileInfo.appendChild(previewBtn);
             
             fileItem.appendChild(fileInfo);
             fileItem.appendChild(removeBtn);
             
             fileItems.appendChild(fileItem);
+            
+            // Create file preview
+            createFilePreview(file, filePreview);
+        }
+        
+        function createFilePreview(file, previewContainer) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const fileType = file.type;
+                
+                if (fileType.startsWith('image/')) {
+                    // Image preview
+                    const img = document.createElement('img');
+                    img.src = content;
+                    img.className = 'image-preview';
+                    previewContainer.appendChild(img);
+                } else if (fileType === 'application/pdf') {
+                    // PDF preview
+                    const embed = document.createElement('embed');
+                    embed.src = content;
+                    embed.className = 'pdf-preview';
+                    embed.type = 'application/pdf';
+                    previewContainer.appendChild(embed);
+                } else if (fileType.startsWith('text/') || fileType === 'application/json' || fileType === 'application/xml') {
+                    // Text preview
+                    const pre = document.createElement('pre');
+                    pre.className = 'text-xs text-gray-600';
+                    pre.textContent = content.substring(0, 500) + (content.length > 500 ? '...' : '');
+                    previewContainer.appendChild(pre);
+                } else {
+                    // Binary file preview
+                    const p = document.createElement('p');
+                    p.className = 'text-xs text-gray-500';
+                    p.textContent = 'Binary file - preview not available';
+                    previewContainer.appendChild(p);
+                }
+            };
+            
+            reader.onerror = function() {
+                const p = document.createElement('p');
+                p.className = 'text-xs text-gray-500';
+                p.textContent = 'Preview not available';
+                previewContainer.appendChild(p);
+            };
+            
+            reader.readAsDataURL(file);
+        }
+        
+        function showFilePreview(file, previewContainer) {
+            previewContainer.classList.toggle('hidden');
         }
         
         function getFileIcon(filename) {
