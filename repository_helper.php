@@ -78,7 +78,7 @@ function getTypeColor($type) {
     ];
     return $colors[$type] ?? 'gray';
 }
-?>
+
 
 // Add this function to repository_helper.php
 function getLanguageColorCode($language) {
@@ -99,3 +99,5 @@ function getLanguageColorCode($language) {
     ];
     return $colors[$language] ?? '#6B7280';
 }
+
+?>
