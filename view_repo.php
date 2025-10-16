@@ -50,15 +50,33 @@ $current_user = $user_result->fetch_assoc();
 // Check if current user is the repository owner
 $is_owner = ($repo['owner_id'] == $user_id);
 
+// Check if user has access to private repository (owner or shared user)
+$has_access = false;
+if ($repo['visibility'] === 'public') {
+    $has_access = true;
+} else {
+    // Check if user is owner
+    if ($is_owner) {
+        $has_access = true;
+    } else {
+        // Check if repository is shared with this user
+        $shared_sql = "SELECT id FROM repository_shares WHERE repository_id = ? AND user_id = ?";
+        $shared_stmt = $conn->prepare($shared_sql);
+        $shared_stmt->bind_param("ii", $repo_id, $user_id);
+        $shared_stmt->execute();
+        $shared_result = $shared_stmt->get_result();
+        $has_access = $shared_result->num_rows > 0;
+    }
+}
+
 // Check repository visibility and access rights
-if ($repo['visibility'] === 'private' && !$is_owner) {
-    // User is not owner and repository is private - show access denied
+if (!$has_access) {
+    // User doesn't have access - show access denied
     $private_repo = true;
 } else {
     $private_repo = false;
     
     // Update view count (only if user is viewing and not the owner, or if owner views count too)
-    // You can modify this logic based on your requirements
     if (!$is_owner) {
         $update_views_sql = "UPDATE repositories SET views = views + 1 WHERE id = ?";
         $update_views_stmt = $conn->prepare($update_views_sql);
@@ -136,6 +154,71 @@ if ($repo['visibility'] === 'private' && !$is_owner) {
                 $repo['stars']--;
             }
         }
+    }
+
+    // Handle add collaborator action
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_collaborator'])) {
+        if ($is_owner && $repo['visibility'] === 'private') {
+            $collaborator_username = trim($_POST['collaborator_username']);
+            
+            // Find user by username
+            $user_search_sql = "SELECT id FROM users WHERE username = ? AND id != ?";
+            $user_search_stmt = $conn->prepare($user_search_sql);
+            $user_search_stmt->bind_param("si", $collaborator_username, $user_id);
+            $user_search_stmt->execute();
+            $user_search_result = $user_search_stmt->get_result();
+            
+            if ($user_search_result->num_rows > 0) {
+                $collaborator = $user_search_result->fetch_assoc();
+                $collaborator_id = $collaborator['id'];
+                
+                // Check if already shared
+                $check_share_sql = "SELECT id FROM repository_shares WHERE repository_id = ? AND user_id = ?";
+                $check_share_stmt = $conn->prepare($check_share_sql);
+                $check_share_stmt->bind_param("ii", $repo_id, $collaborator_id);
+                $check_share_stmt->execute();
+                $check_share_result = $check_share_stmt->get_result();
+                
+                if ($check_share_result->num_rows === 0) {
+                    // Add collaborator
+                    $add_share_sql = "INSERT INTO repository_shares (repository_id, user_id, shared_by, created_at) VALUES (?, ?, ?, NOW())";
+                    $add_share_stmt = $conn->prepare($add_share_sql);
+                    $add_share_stmt->bind_param("iii", $repo_id, $collaborator_id, $user_id);
+                    $add_share_stmt->execute();
+                    $share_success = "Repository shared with $collaborator_username successfully!";
+                } else {
+                    $share_error = "Repository is already shared with $collaborator_username";
+                }
+            } else {
+                $share_error = "User '$collaborator_username' not found";
+            }
+        }
+    }
+
+    // Handle remove collaborator action
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_collaborator'])) {
+        if ($is_owner) {
+            $remove_user_id = intval($_POST['user_id']);
+            $remove_sql = "DELETE FROM repository_shares WHERE repository_id = ? AND user_id = ?";
+            $remove_stmt = $conn->prepare($remove_sql);
+            $remove_stmt->bind_param("ii", $repo_id, $remove_user_id);
+            $remove_stmt->execute();
+        }
+    }
+
+    // Get collaborators for private repositories (only if owner)
+    $collaborators = [];
+    if ($is_owner && $repo['visibility'] === 'private') {
+        $collab_sql = "SELECT u.id, u.username, u.profile_image, rs.created_at 
+                      FROM repository_shares rs 
+                      JOIN users u ON rs.user_id = u.id 
+                      WHERE rs.repository_id = ? 
+                      ORDER BY rs.created_at DESC";
+        $collab_stmt = $conn->prepare($collab_sql);
+        $collab_stmt->bind_param("i", $repo_id);
+        $collab_stmt->execute();
+        $collab_result = $collab_stmt->get_result();
+        $collaborators = $collab_result->fetch_all(MYSQLI_ASSOC);
     }
 
     // Get repository data only if user has access
@@ -701,6 +784,32 @@ $conn->close();
             justify-content: flex-end;
             gap: 12px;
         }
+        
+        .share-link {
+            background-color: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-family: monospace;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .share-link:hover {
+            background-color: #f3f4f6;
+        }
+        
+        .collaborator-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e1e4e8;
+        }
+        
+        .collaborator-item:last-child {
+            border-bottom: none;
+        }
     </style>
 </head>
 
@@ -811,6 +920,12 @@ $conn->close();
                         </span>
                     </div>
                     <div class="flex items-center space-x-2">
+                        <!-- Share Button - Show for all repositories -->
+                        <button onclick="showShareModal()" class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 hover:bg-gray-200">
+                            <i class="fas fa-share-alt"></i>
+                            <span>Share</span>
+                        </button>
+                        
                         <button class="btn-secondary px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2">
                             <i class="fas fa-eye"></i>
                             <span>Watch</span>
@@ -869,6 +984,87 @@ $conn->close();
                             </button>
                         <?php endif; ?>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Share Modal -->
+        <div id="shareModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="text-lg font-semibold text-gray-900">Share Repository</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Repository Link</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="shareLink" value="<?php echo "https://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']; ?>" readonly class="flex-1 share-link">
+                            <button onclick="copyShareLink()" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                                Copy
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">
+                            <?php if ($repo['visibility'] === 'public'): ?>
+                                Anyone with this link can view this repository.
+                            <?php else: ?>
+                                Only you and people you share with can view this repository.
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                    
+                    <?php if ($is_owner && $repo['visibility'] === 'private'): ?>
+                        <div class="border-t border-gray-200 pt-4">
+                            <h4 class="font-semibold text-gray-900 mb-3">Share with specific people</h4>
+                            
+                            <?php if (isset($share_success)): ?>
+                                <div class="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                    <p class="text-green-700 text-sm"><?php echo $share_success; ?></p>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php if (isset($share_error)): ?>
+                                <div class="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                    <p class="text-red-700 text-sm"><?php echo $share_error; ?></p>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <form method="POST" action="" class="mb-4">
+                                <div class="flex space-x-2">
+                                    <input type="text" name="collaborator_username" placeholder="Enter username" required class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500" placeholder="e.g., johndoe">
+                                    <button type="submit" name="add_collaborator" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
+                                        Add
+                                    </button>
+                                </div>
+                            </form>
+                            
+                            <?php if (!empty($collaborators)): ?>
+                                <div class="mt-4">
+                                    <h5 class="font-medium text-gray-900 mb-2">People with access</h5>
+                                    <div class="space-y-2 max-h-40 overflow-y-auto">
+                                        <?php foreach ($collaborators as $collab): ?>
+                                            <div class="collaborator-item">
+                                                <div class="flex items-center space-x-3 flex-1">
+                                                    <img src="<?php echo !empty($collab['profile_image']) ? $collab['profile_image'] : 'https://picsum.photos/seed/user' . $collab['id'] . '/32/32.jpg'; ?>" alt="<?php echo htmlspecialchars($collab['username']); ?>" class="w-6 h-6 rounded-full">
+                                                    <span class="text-sm font-medium"><?php echo htmlspecialchars($collab['username']); ?></span>
+                                                </div>
+                                                <form method="POST" action="" class="m-0">
+                                                    <input type="hidden" name="user_id" value="<?php echo $collab['id']; ?>">
+                                                    <button type="submit" name="remove_collaborator" class="text-red-600 hover:text-red-800 text-sm">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" onclick="hideShareModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
+                        Close
+                    </button>
                 </div>
             </div>
         </div>
@@ -1204,6 +1400,35 @@ $conn->close();
             window.location.href = 'editor.php?id=' + repoId;
         }
 
+        // Share modal functions
+        function showShareModal() {
+            document.getElementById('shareModal').style.display = 'block';
+        }
+
+        function hideShareModal() {
+            document.getElementById('shareModal').style.display = 'none';
+        }
+
+        function copyShareLink() {
+            const shareLink = document.getElementById('shareLink');
+            shareLink.select();
+            shareLink.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(shareLink.value);
+            
+            // Show copied feedback
+            const copyButton = event.target;
+            const originalText = copyButton.textContent;
+            copyButton.textContent = 'Copied!';
+            copyButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            copyButton.classList.add('bg-green-600', 'hover:bg-green-700');
+            
+            setTimeout(() => {
+                copyButton.textContent = originalText;
+                copyButton.classList.remove('bg-green-600', 'hover:bg-green-700');
+                copyButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            }, 2000);
+        }
+
         // Fork modal functions
         function showForkModal() {
             document.getElementById('forkModal').style.display = 'block';
@@ -1215,10 +1440,13 @@ $conn->close();
 
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('forkModal');
-            if (event.target === modal) {
-                hideForkModal();
-            }
+            const modals = ['shareModal', 'forkModal'];
+            modals.forEach(modalId => {
+                const modal = document.getElementById(modalId);
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
         }
     </script>
 </body>
