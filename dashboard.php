@@ -433,7 +433,7 @@ while ($row = $result->fetch_assoc()) {
                         </a>
                         <?php endforeach; ?>
                     </div>
-                    <button class="w-full mt-3 px-3 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium">
+                    <button onclick="window.location.href='create_repository.php'" class="w-full mt-3 px-3 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium">
                         <i class="fas fa-plus mr-2"></i>New repository
                     </button>
                 </div>
@@ -451,7 +451,7 @@ while ($row = $result->fetch_assoc()) {
                 
                 <!-- Quick Actions -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                    <button class="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all">
+                    <button onclick="window.location.href='create_repository.php'" class="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all">
                         <i class="fas fa-plus-circle text-blue-600 text-2xl mb-2"></i>
                         <p class="font-semibold text-gray-900">New Repository</p>
                         <p class="text-xs text-gray-600">Create a new repo</p>
@@ -640,7 +640,7 @@ Date:   Mon Dec 18 10:30:00 2023
     </div>
     
     <!-- Floating Action Button -->
-    <button class="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all transform hover:scale-110 z-30">
+    <button onclick="window.location.href='create_repository.php'" class="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all transform hover:scale-110 z-30">
         <i class="fas fa-plus text-xl"></i>
     </button>
     
