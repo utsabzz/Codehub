@@ -1,0 +1,103 @@
+<?php
+// repository_helper.php
+
+function findReadmeFile($repoPath) {
+    $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repoPath;
+    $readmeFiles = ['README.md', 'readme.md', 'README.txt', 'readme.txt'];
+    
+    foreach ($readmeFiles as $file) {
+        if (file_exists($fullPath . '/' . $file)) {
+            return $file;
+        }
+    }
+    return null;
+}
+
+function getFileContent($repoPath, $filename) {
+    $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repoPath . '/' . $filename;
+    if (file_exists($fullPath)) {
+        return file_get_contents($fullPath);
+    }
+    return null;
+}
+
+function getLanguageColor($language) {
+    $colors = [
+        'PHP' => 'purple',
+        'JavaScript' => 'yellow',
+        'Python' => 'blue',
+        'Java' => 'red',
+        'HTML' => 'orange',
+        'CSS' => 'pink',
+        'TypeScript' => 'blue',
+        'C++' => 'pink',
+        'C#' => 'green',
+        'Ruby' => 'red'
+    ];
+    return $colors[$language] ?? 'gray';
+}
+
+function getTimeAgo($date) {
+    $timestamp = strtotime($date);
+    $diff = time() - $timestamp;
+    
+    if ($diff < 60) return 'just now';
+    if ($diff < 3600) return floor($diff / 60) . ' minutes ago';
+    if ($diff < 86400) return floor($diff / 3600) . ' hours ago';
+    if ($diff < 2592000) return floor($diff / 86400) . ' days ago';
+    if ($diff < 31536000) return floor($diff / 2592000) . ' months ago';
+    return floor($diff / 31536000) . ' years ago';
+}
+
+function getStatusColor($status) {
+    $colors = [
+        'open' => 'green',
+        'closed' => 'red',
+        'merged' => 'purple',
+        'draft' => 'gray'
+    ];
+    return $colors[$status] ?? 'gray';
+}
+
+function getStatusText($status) {
+    $texts = [
+        'open' => 'Open',
+        'closed' => 'Closed',
+        'merged' => 'Merged',
+        'draft' => 'Draft'
+    ];
+    return $texts[$status] ?? 'Unknown';
+}
+
+function getTypeColor($type) {
+    $colors = [
+        'bug' => 'red',
+        'feature' => 'green',
+        'enhancement' => 'blue',
+        'question' => 'gray'
+    ];
+    return $colors[$type] ?? 'gray';
+}
+
+
+// Add this function to repository_helper.php
+function getLanguageColorCode($language) {
+    $colors = [
+        'PHP' => '#787CB5',
+        'JavaScript' => '#F7DF1E',
+        'Python' => '#3776AB',
+        'Java' => '#ED8B00',
+        'HTML' => '#E34F26',
+        'CSS' => '#1572B6',
+        'TypeScript' => '#3178C6',
+        'C++' => '#00599C',
+        'C' => '#555555',
+        'Ruby' => '#CC342D',
+        'Go' => '#00ADD8',
+        'Rust' => '#000000',
+        'SQL' => '#336791'
+    ];
+    return $colors[$language] ?? '#6B7280';
+}
+
+?>
