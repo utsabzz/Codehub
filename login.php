@@ -6,8 +6,9 @@
     <title>Sign in to CodeHub APS · CodeHub APS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Platform Library -->
-    <script src="https://apis.google.com/js/platform.js" async defer></script>
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <meta name="google-signin-client_id" content="163339139019-r9gecb5pif63c3k7tc0ed0as9n34hj7l.apps.googleusercontent.com">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         
@@ -116,9 +117,8 @@
             animation-delay: 4s;
         }
         
-        /* Custom Google Sign-In Button */
-        .google-signin-button {
-            display: inline-flex;
+        .google-custom-btn {
+            display: flex;
             align-items: center;
             justify-content: center;
             width: 100%;
@@ -127,26 +127,37 @@
             border-radius: 4px;
             background-color: #fff;
             color: #3c4043;
-            font-family: 'Roboto', sans-serif;
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.3s ease;
         }
         
-        .google-signin-button:hover {
+        .google-custom-btn:hover {
             box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
             background-color: #f8f9fa;
         }
         
-        .google-signin-button:active {
+        .google-custom-btn:active {
             background-color: #f1f3f4;
         }
         
-        .google-signin-button .google-icon {
-            width: 18px;
-            height: 18px;
-            margin-right: 10px;
+        /* Google button container */
+        .g_id_signin {
+            width: 100% !important;
+        }
+        
+        /* Custom Google button styling */
+        .custom-google-btn {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            height: 42px !important;
+            border: 1px solid #dadce0 !important;
+            border-radius: 4px !important;
+            background: white !important;
+            cursor: pointer !important;
         }
     </style>
 </head>
@@ -277,14 +288,22 @@
             <!-- Social Login Options -->
             <div class="grid grid-cols-2 gap-3">
                 <!-- Google Sign-In Button -->
-                <div id="googleSignInButton" class="google-signin-button">
-                    <svg class="google-icon" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    <span>Google</span>
+                <div id="g_id_onload"
+                     data-client_id="163339139019-r9gecb5pif63c3k7tc0ed0as9n34hj7l.apps.googleusercontent.com"
+                     data-context="signin"
+                     data-ux_mode="popup"
+                     data-callback="handleGoogleSignIn"
+                     data-auto_prompt="false">
+                </div>
+
+                <div class="g_id_signin"
+                     data-type="standard"
+                     data-shape="rectangular"
+                     data-theme="outline"
+                     data-text="signin_with"
+                     data-size="large"
+                     data-logo_alignment="left"
+                     data-width="300">
                 </div>
                 
                 <button class="social-button flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all">
@@ -540,6 +559,106 @@
             }
         });
 
+        // Google Sign-In Handler
+        function handleGoogleSignIn(response) {
+            console.log('Google Sign-In response received:', response);
+            
+            // Decode the JWT token to get user info
+            const responsePayload = decodeJWTResponse(response.credential);
+            console.log('Google user info:', responsePayload);
+            
+            const googleData = {
+                id: responsePayload.sub,
+                email: responsePayload.email,
+                name: responsePayload.name,
+                firstName: responsePayload.given_name,
+                lastName: responsePayload.family_name,
+                imageUrl: responsePayload.picture,
+                idToken: response.credential
+            };
+            
+            // Show loading state
+            showLoadingState();
+            
+            // Send Google data to backend
+            fetch('backend/google_auth.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(googleData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Backend response:', data);
+                hideLoadingState();
+                
+                if (data.success) {
+                    showSuccess('Google Sign-In successful!');
+                    
+                    // Show OTP modal if 2FA is enabled
+                    if (data.twoFactorRequired) {
+                        setTimeout(() => {
+                            showOTPModal();
+                        }, 1000);
+                    } else {
+                        // Redirect to dashboard
+                        setTimeout(() => {
+                            window.location.href = data.redirect || 'dashboard.php';
+                        }, 1500);
+                    }
+                } else {
+                    showError('errorMessage', data.message || 'Google authentication failed');
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                hideLoadingState();
+                showError('errorMessage', 'An error occurred during Google authentication: ' + error.message);
+            });
+        }
+
+        function decodeJWTResponse(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                
+                return JSON.parse(jsonPayload);
+            } catch (error) {
+                console.error('Error decoding JWT:', error);
+                return {};
+            }
+        }
+
+        function showLoadingState() {
+            // Disable all social buttons
+            const socialButtons = document.querySelectorAll('.social-button, .g_id_signin');
+            socialButtons.forEach(btn => {
+                btn.style.opacity = '0.6';
+                btn.style.pointerEvents = 'none';
+            });
+            
+            // Show loading message
+            showSuccess('Authenticating with Google...');
+        }
+
+        function hideLoadingState() {
+            // Re-enable all social buttons
+            const socialButtons = document.querySelectorAll('.social-button, .g_id_signin');
+            socialButtons.forEach(btn => {
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            });
+        }
+
         // Form validation and submission for login
         const loginForm = document.getElementById('loginForm');
         const submitBtn = document.getElementById('submitBtn');
@@ -755,88 +874,6 @@
             }
         });
 
-        // Google Sign-In
-        document.addEventListener('DOMContentLoaded', function() {
-            // Replace with your Google Client ID
-            const googleClientId = 'YOUR_GOOGLE_CLIENT_ID';
-            
-            // Initialize Google Sign-In
-            gapi.load('auth2', function() {
-                auth2 = gapi.auth2.init({
-                    client_id: googleClientId,
-                    cookiepolicy: 'single_host_origin',
-                    scope: 'profile email'
-                });
-                
-                // Attach click handler to the Google Sign-In button
-                document.getElementById('googleSignInButton').addEventListener('click', function() {
-                    auth2.signIn().then(onGoogleSignIn, function(error) {
-                        console.error('Google Sign-In error:', error);
-                        showError('errorMessage', 'Google Sign-In failed. Please try again.');
-                    });
-                });
-            });
-        });
-
-        // Handle Google Sign-In success
-        function onGoogleSignIn(googleUser) {
-            // Get the Google profile data
-            const profile = googleUser.getBasicProfile();
-            const authResponse = googleUser.getAuthResponse();
-            
-            // Extract user information
-            const googleData = {
-                id: profile.getId(),
-                name: profile.getName(),
-                firstName: profile.getGivenName(),
-                lastName: profile.getFamilyName(),
-                email: profile.getEmail(),
-                imageUrl: profile.getImageUrl(),
-                idToken: authResponse.id_token
-            };
-            
-            // Show loading state
-            setLoading(true);
-            
-            // Send Google data to backend
-            fetch('backend/google_auth.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(googleData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                setLoading(false);
-                
-                if (data.success) {
-                    showSuccess();
-                    
-                    // Show OTP modal if 2FA is enabled
-                    if (data.twoFactorRequired) {
-                        setTimeout(() => {
-                            showOTPModal();
-                        }, 1000);
-                    } else {
-                        // Redirect to dashboard
-                        setTimeout(() => {
-                            window.location.href = data.redirect || 'dashboard.php';
-                        }, 1500);
-                    }
-                } else {
-                    showError('errorMessage', data.message || 'Google authentication failed');
-                    shakeForm();
-                }
-            })
-            .catch(error => {
-                setLoading(false);
-                showError('errorMessage', 'An error occurred during Google authentication');
-                shakeForm();
-                console.error('Google auth error:', error);
-            });
-        }
-
         // Helper functions for login form
         function setLoading(isLoading) {
             if (isLoading) {
@@ -944,6 +981,11 @@
             otpModal.classList.add('hidden');
             otpModal.classList.remove('flex');
         }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded successfully');
+        });
     </script>
 </body>
 </html>
