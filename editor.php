@@ -57,13 +57,14 @@ function formatFileSize($bytes) {
 
 // Get repository files WITHOUT content initially
 function getRepoFilesFlat($repo_path) {
-    // Remove any leading slash and construct the correct base path
-    $repo_path = ltrim($repo_path, '/');
-    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repo_path;
+    // Remove 'projects/' prefix if it exists
+    $clean_path = preg_replace('#^projects/#', '', $repo_path);
+    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $clean_path;
     
     // Debug: Log the actual path being used
     error_log("Looking for files in: " . $base_path);
     error_log("Repository path from DB: " . $repo_path);
+    error_log("Cleaned path: " . $clean_path);
     
     if (!is_dir($base_path)) {
         error_log("Directory not found: " . $base_path);
@@ -292,10 +293,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // DEBUG: Check the actual file system structure
  $repo_path_from_db = $repo['path'];
- $full_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repo_path_from_db;
+ $clean_path = preg_replace('#^projects/#', '', $repo_path_from_db);
+ $full_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $clean_path;
 
 error_log("=== DEBUG FILE PATHS ===");
 error_log("Database path: " . $repo_path_from_db);
+error_log("Cleaned path: " . $clean_path);
 error_log("Full constructed path: " . $full_path);
 error_log("Directory exists: " . (is_dir($full_path) ? 'YES' : 'NO'));
 error_log("Directory readable: " . (is_readable($full_path) ? 'YES' : 'NO'));
@@ -327,7 +330,7 @@ foreach ($repo_files as $file) {
 
 // Debug output
 error_log("Repository path: " . $repo['path']);
-error_log("Base path: " . $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repo['path']);
+error_log("Base path: " . $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . preg_replace('#^projects/#', '', $repo['path']));
 error_log("Files found: " . count($repo_files));
 
 // Close connection
@@ -800,7 +803,7 @@ error_log("Files found: " . count($repo_files));
             </button>
             <button onclick="saveFile()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-medium flex items-center gap-2 transition">
                 <i class="fas fa-save"></i>
-                Save
+                Comit Changes
             </button>
             <a href="view_repo.php?id=<?php echo $repo_id; ?>" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-sm font-medium flex items-center gap-2 transition">
                 <i class="fas fa-arrow-left"></i>

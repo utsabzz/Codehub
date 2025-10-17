@@ -18,17 +18,17 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
     exit;
 }
 
-$repo_id = intval($_GET['id']);
+ $repo_id = intval($_GET['id']);
 
 // Get repository information
-$sql = "SELECT r.*, u.username as owner_username, u.profile_image as owner_profile_image 
+ $sql = "SELECT r.*, u.username as owner_username, u.profile_image as owner_profile_image 
         FROM repositories r 
         JOIN users u ON r.owner_id = u.id 
         WHERE r.id = ?";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $repo_id);
-$stmt->execute();
-$result = $stmt->get_result();
+ $stmt = $conn->prepare($sql);
+ $stmt->bind_param("i", $repo_id);
+ $stmt->execute();
+ $result = $stmt->get_result();
 
 if ($result->num_rows === 0) {
     // Repository not found
@@ -36,22 +36,22 @@ if ($result->num_rows === 0) {
     exit;
 }
 
-$repo = $result->fetch_assoc();
+ $repo = $result->fetch_assoc();
 
 // Get user information for header
-$user_id = $_SESSION['user_id'];
-$user_sql = "SELECT id, username, email, profile_image FROM users WHERE id = ?";
-$user_stmt = $conn->prepare($user_sql);
-$user_stmt->bind_param("i", $user_id);
-$user_stmt->execute();
-$user_result = $user_stmt->get_result();
-$current_user = $user_result->fetch_assoc();
+ $user_id = $_SESSION['user_id'];
+ $user_sql = "SELECT id, username, email, profile_image FROM users WHERE id = ?";
+ $user_stmt = $conn->prepare($user_sql);
+ $user_stmt->bind_param("i", $user_id);
+ $user_stmt->execute();
+ $user_result = $user_stmt->get_result();
+ $current_user = $user_result->fetch_assoc();
 
 // Check if current user is the repository owner
-$is_owner = ($repo['owner_id'] == $user_id);
+ $is_owner = ($repo['owner_id'] == $user_id);
 
 // Check if user has access to private repository (owner or shared user)
-$has_access = false;
+ $has_access = false;
 if ($repo['visibility'] === 'public') {
     $has_access = true;
 } else {
@@ -263,7 +263,7 @@ function forkRepository($repo_id, $user_id, $username, $conn) {
     }
     
     // Create repository directory
-    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/projects';
+    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub';
     $user_dir = $base_path . '/' . $username;
     $repo_dir = $user_dir . '/' . $new_repo_name;
     
@@ -282,7 +282,7 @@ function forkRepository($repo_id, $user_id, $username, $conn) {
     $fork_sql = "INSERT INTO repositories (name, path, description, owner_id, owner_username, visibility, default_branch, forked_from, stars, forks, views) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)";
     $fork_stmt = $conn->prepare($fork_sql);
-    $new_repo_path = 'projects/' . $username . '/' . $new_repo_name;
+    $new_repo_path = $username . '/' . $new_repo_name;
     $fork_stmt->bind_param("sssisssi", $new_repo_name, $new_repo_path, $original_repo['description'], $user_id, $username, $original_repo['visibility'], $original_repo['default_branch'], $repo_id);
     $fork_stmt->execute();
     
@@ -321,7 +321,9 @@ function copyDirectory($source, $destination) {
 
 // Get repository files and folder structure
 function getRepoStructure($repo_path) {
-    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repo_path;
+    // Remove 'projects/' prefix if it exists
+    $clean_path = preg_replace('#^projects/#', '', $repo_path);
+    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $clean_path;
     $structure = [];
     
     if (!is_dir($base_path)) {
@@ -358,7 +360,9 @@ function getRepoStructure($repo_path) {
 
 // Get README content
 function getReadmeContent($repo_path) {
-    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repo_path;
+    // Remove 'projects/' prefix if it exists
+    $clean_path = preg_replace('#^projects/#', '', $repo_path);
+    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $clean_path;
     $readme_files = ['README.md', 'readme.md', 'README.txt', 'readme.txt'];
     
     foreach ($readme_files as $file) {
@@ -376,7 +380,9 @@ function getReadmeContent($repo_path) {
 
 // Get repository statistics
 function getRepoStats($repo_path) {
-    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repo_path;
+    // Remove 'projects/' prefix if it exists
+    $clean_path = preg_replace('#^projects/#', '', $repo_path);
+    $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $clean_path;
     $stats = [
         'files' => 0,
         'folders' => 0,
@@ -593,7 +599,7 @@ function localGetTimeAgo($date) {
 }
 
 // Close connection
-$conn->close();
+ $conn->close();
 ?>
 
 <!DOCTYPE html>
