@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub File Explorer</title>
+    <title>File Explorer - CodeHub APS</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -99,6 +99,16 @@
 
         .btn-primary:hover {
             background-color: #2c974b;
+        }
+
+        .btn-danger {
+            background-color: #d73a49;
+            color: white;
+            border-color: #d73a49;
+        }
+
+        .btn-danger:hover {
+            background-color: #cb2431;
         }
 
         /* Tab Navigation */
@@ -217,6 +227,31 @@
             font-size: 14px;
         }
 
+        .file-actions-menu {
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .file-item:hover .file-actions-menu {
+            opacity: 1;
+        }
+
+        .file-action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--github-text-secondary);
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .file-action-btn:hover {
+            background-color: var(--github-hover-bg);
+            color: var(--github-text);
+        }
+
         .file-message {
             font-size: 12px;
             color: var(--github-text-secondary);
@@ -225,7 +260,7 @@
 
         .file-time {
             font-size: 12px;
-            color: var(--github-text-secondary;
+            color: var(--github-text-secondary);
         }
 
         /* Modals */
@@ -573,6 +608,30 @@
         </div>
     </div>
 
+    <!-- Edit File Modal -->
+    <div class="modal" id="edit-file-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit file</h3>
+                <button class="modal-close" id="close-edit-file-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">File name</label>
+                    <input type="text" class="form-input" id="edit-file-name" placeholder="example.txt">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">File content</label>
+                    <textarea class="form-input" id="edit-file-content" rows="10" placeholder="Enter file content here..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="cancel-edit-file">Cancel</button>
+                <button class="btn btn-primary" id="save-file">Save changes</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Add Folder Modal -->
     <div class="modal" id="add-folder-modal">
         <div class="modal-content">
@@ -623,6 +682,23 @@
         </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="delete-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Confirm deletion</h3>
+                <button class="modal-close" id="close-delete-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="delete-message">Are you sure you want to delete this item?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="cancel-delete">Cancel</button>
+                <button class="btn btn-danger" id="confirm-delete">Delete</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast">
         <i class="fas fa-check-circle" id="toast-icon"></i>
@@ -630,57 +706,6 @@
     </div>
 
     <script>
-        // Database structure integration
-        const projectData = {
-            id: 1,
-            name: "file-explorer",
-            path: "projects/abhirup/PrivateRepo",
-            description: "A GitHub-style file explorer implementation",
-            owner_id: 1,
-            owner_username: "abhirup",
-            visibility: "public",
-            language: "JavaScript",
-            stars: 15,
-            forks: 3,
-            views: 127,
-            default_branch: "main",
-            forked_from: null,
-            created_at: "2023-06-15 10:30:00",
-            updated_at: "2023-10-20 14:45:00"
-        };
-
-        // File system structure
-        let fileSystem = {
-            "README.md": { type: "file", content: "# File Explorer\n\nA GitHub-style file explorer implementation.", lastModified: "2023-10-20 14:45:00" },
-            "src": {
-                type: "folder",
-                children: {
-                    "index.js": { type: "file", content: "console.log('Hello World');", lastModified: "2023-10-19 11:20:00" },
-                    "styles.css": { type: "file", content: "body { margin: 0; }", lastModified: "2023-10-18 09:15:00" },
-                    "components": {
-                        type: "folder",
-                        children: {
-                            "FileItem.js": { type: "file", content: "// File item component", lastModified: "2023-10-17 16:30:00" },
-                            "Modal.js": { type: "file", content: "// Modal component", lastModified: "2023-10-16 13:45:00" }
-                        },
-                        lastModified: "2023-10-17 16:30:00"
-                    }
-                },
-                lastModified: "2023-10-19 11:20:00"
-            },
-            "package.json": { type: "file", content: '{\n  "name": "file-explorer",\n  "version": "1.0.0"\n}', lastModified: "2023-10-15 12:10:00" },
-            ".gitignore": { type: "file", content: "node_modules/\n.env", lastModified: "2023-10-14 08:05:00" },
-            "docs": {
-                type: "folder",
-                children: {
-                    "README.md": { type: "file", content: "# Documentation", lastModified: "2023-10-13 15:25:00" },
-                    "api.md": { type: "file", content: "# API Reference", lastModified: "2023-10-12 10:40:00" }
-                },
-                lastModified: "2023-10-13 15:25:00"
-            },
-            "LICENSE": { type: "file", content: "MIT License", lastModified: "2023-10-10 14:20:00" }
-        };
-
         // DOM elements
         const repoName = document.getElementById('repo-name');
         const repoVisibility = document.getElementById('repo-visibility');
@@ -691,17 +716,25 @@
         const addFolderBtn = document.getElementById('add-folder-btn');
         const uploadBtn = document.getElementById('upload-btn');
         const addFileModal = document.getElementById('add-file-modal');
+        const editFileModal = document.getElementById('edit-file-modal');
         const addFolderModal = document.getElementById('add-folder-modal');
         const uploadModal = document.getElementById('upload-modal');
+        const deleteModal = document.getElementById('delete-modal');
         const closeAddFileModal = document.getElementById('close-add-file-modal');
+        const closeEditFileModal = document.getElementById('close-edit-file-modal');
         const closeAddFolderModal = document.getElementById('close-add-folder-modal');
         const closeUploadModal = document.getElementById('close-upload-modal');
+        const closeDeleteModal = document.getElementById('close-delete-modal');
         const cancelAddFile = document.getElementById('cancel-add-file');
+        const cancelEditFile = document.getElementById('cancel-edit-file');
         const cancelAddFolder = document.getElementById('cancel-add-folder');
         const cancelUpload = document.getElementById('cancel-upload');
+        const cancelDelete = document.getElementById('cancel-delete');
         const createNewFile = document.getElementById('create-new-file');
+        const saveFile = document.getElementById('save-file');
         const createNewFolder = document.getElementById('create-new-folder');
         const uploadFiles = document.getElementById('upload-files');
+        const confirmDelete = document.getElementById('confirm-delete');
         const fileDropArea = document.getElementById('file-drop-area');
         const fileInput = document.getElementById('file-input');
         const browseFiles = document.getElementById('browse-files');
@@ -711,20 +744,35 @@
         const toastIcon = document.getElementById('toast-icon');
         const uploadText = document.getElementById('upload-text');
         const uploadSpinner = document.getElementById('upload-spinner');
+        const deleteMessage = document.getElementById('delete-message');
 
         // Current path and state
         let currentPath = [];
         let selectedFiles = [];
+        let currentFileToEdit = null;
+        let currentItemToDelete = null;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             initializeProject();
-            renderFiles(getCurrentDirectory());
+            loadFiles();
             setupEventListeners();
         });
 
         // Initialize project data
         function initializeProject() {
+            // Get repository data from URL parameters or use defaults
+            const urlParams = new URLSearchParams(window.location.search);
+            const repoId = urlParams.get('id');
+            
+            // In a real implementation, you would fetch this from your backend
+            const projectData = {
+                id: repoId || 1,
+                name: urlParams.get('name') || 'file-explorer',
+                visibility: urlParams.get('visibility') || 'public',
+                default_branch: urlParams.get('branch') || 'main'
+            };
+            
             repoName.textContent = projectData.name;
             repoVisibility.textContent = projectData.visibility.charAt(0).toUpperCase() + projectData.visibility.slice(1);
             branchName.textContent = projectData.default_branch;
@@ -768,6 +816,10 @@
                 addFileModal.classList.remove('active');
             });
 
+            closeEditFileModal.addEventListener('click', () => {
+                editFileModal.classList.remove('active');
+            });
+
             closeAddFolderModal.addEventListener('click', () => {
                 addFolderModal.classList.remove('active');
             });
@@ -777,8 +829,16 @@
                 resetFileUpload();
             });
 
+            closeDeleteModal.addEventListener('click', () => {
+                deleteModal.classList.remove('active');
+            });
+
             cancelAddFile.addEventListener('click', () => {
                 addFileModal.classList.remove('active');
+            });
+
+            cancelEditFile.addEventListener('click', () => {
+                editFileModal.classList.remove('active');
             });
 
             cancelAddFolder.addEventListener('click', () => {
@@ -788,6 +848,10 @@
             cancelUpload.addEventListener('click', () => {
                 uploadModal.classList.remove('active');
                 resetFileUpload();
+            });
+
+            cancelDelete.addEventListener('click', () => {
+                deleteModal.classList.remove('active');
             });
 
             // Create new file
@@ -801,14 +865,32 @@
                 }
                 
                 // Add file to current directory
-                addFileToCurrentDirectory(fileName, fileContent);
+                createFile(fileName, fileContent);
                 
                 // Reset form and close modal
                 document.getElementById('new-file-name').value = '';
                 document.getElementById('new-file-content').value = '';
                 addFileModal.classList.remove('active');
+            });
+
+            // Save edited file
+            saveFile.addEventListener('click', () => {
+                const fileName = document.getElementById('edit-file-name').value;
+                const fileContent = document.getElementById('edit-file-content').value;
                 
-                showToast(`File "${fileName}" created successfully`, 'success');
+                if (!fileName) {
+                    showToast('Please enter a file name', 'error');
+                    return;
+                }
+                
+                // Update file
+                updateFile(currentFileToEdit, fileName, fileContent);
+                
+                // Reset form and close modal
+                document.getElementById('edit-file-name').value = '';
+                document.getElementById('edit-file-content').value = '';
+                editFileModal.classList.remove('active');
+                currentFileToEdit = null;
             });
 
             // Create new folder
@@ -821,13 +903,11 @@
                 }
                 
                 // Add folder to current directory
-                addFolderToCurrentDirectory(folderName);
+                createFolder(folderName);
                 
                 // Reset form and close modal
                 document.getElementById('new-folder-name').value = '';
                 addFolderModal.classList.remove('active');
-                
-                showToast(`Folder "${folderName}" created successfully`, 'success');
             });
 
             // File upload
@@ -871,7 +951,7 @@
                 setTimeout(() => {
                     // Add files to current directory
                     selectedFiles.forEach(file => {
-                        addFileToCurrentDirectory(file.name, 'Uploaded file content');
+                        uploadFile(file);
                     });
                     
                     // Reset and close modal
@@ -880,6 +960,15 @@
                     
                     showToast(`${selectedFiles.length} file(s) uploaded successfully`, 'success');
                 }, 1500);
+            });
+
+            // Confirm delete
+            confirmDelete.addEventListener('click', () => {
+                if (currentItemToDelete) {
+                    deleteItem(currentItemToDelete);
+                    deleteModal.classList.remove('active');
+                    currentItemToDelete = null;
+                }
             });
 
             // Branch button
@@ -893,9 +982,50 @@
             });
         }
 
+        // Load files from server
+        function loadFiles() {
+            // In a real implementation, you would fetch this from your backend
+            // For now, we'll use a mock API
+            const currentDir = getCurrentDirectory();
+            renderFiles(currentDir);
+        }
+
         // Get current directory based on path
         function getCurrentDirectory() {
-            let currentDir = fileSystem;
+            // In a real implementation, you would fetch this from your backend
+            // For now, we'll use a mock file system
+            const mockFileSystem = {
+                "README.md": { type: "file", content: "# File Explorer\n\nA GitHub-style file explorer implementation.", lastModified: "2023-10-20 14:45:00" },
+                "src": {
+                    type: "folder",
+                    children: {
+                        "index.js": { type: "file", content: "console.log('Hello World');", lastModified: "2023-10-19 11:20:00" },
+                        "styles.css": { type: "file", content: "body { margin: 0; }", lastModified: "2023-10-18 09:15:00" },
+                        "components": {
+                            type: "folder",
+                            children: {
+                                "FileItem.js": { type: "file", content: "// File item component", lastModified: "2023-10-17 16:30:00" },
+                                "Modal.js": { type: "file", content: "// Modal component", lastModified: "2023-10-16 13:45:00" }
+                            },
+                            lastModified: "2023-10-17 16:30:00"
+                        }
+                    },
+                    lastModified: "2023-10-19 11:20:00"
+                },
+                "package.json": { type: "file", content: '{\n  "name": "file-explorer",\n  "version": "1.0.0"\n}', lastModified: "2023-10-15 12:10:00" },
+                ".gitignore": { type: "file", content: "node_modules/\n.env", lastModified: "2023-10-14 08:05:00" },
+                "docs": {
+                    type: "folder",
+                    children: {
+                        "README.md": { type: "file", content: "# Documentation", lastModified: "2023-10-13 15:25:00" },
+                        "api.md": { type: "file", content: "# API Reference", lastModified: "2023-10-12 10:40:00" }
+                    },
+                    lastModified: "2023-10-13 15:25:00"
+                },
+                "LICENSE": { type: "file", content: "MIT License", lastModified: "2023-10-10 14:20:00" }
+            };
+
+            let currentDir = mockFileSystem;
             
             for (const segment of currentPath) {
                 if (currentDir[segment] && currentDir[segment].type === 'folder') {
@@ -903,7 +1033,7 @@
                 } else {
                     // Path doesn't exist, reset to root
                     currentPath = [];
-                    return fileSystem;
+                    return mockFileSystem;
                 }
             }
             
@@ -950,6 +1080,16 @@
                 <div class="file-item" data-name="${file.name}" data-type="${file.type}">
                     <i class="fas ${file.type === 'folder' ? 'fa-folder' : file.icon === 'markdown' ? 'fa-file-alt' : 'fa-file'} file-icon ${file.icon}"></i>
                     <span class="file-name">${file.name}</span>
+                    <div class="file-actions-menu">
+                        ${file.type === 'file' ? `
+                            <button class="file-action-btn edit-file" title="Edit file">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        ` : ''}
+                        <button class="file-action-btn delete-item" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                     <span class="file-message">Latest commit</span>
                     <span class="file-time">${formatTimeAgo(file.lastModified)}</span>
                 </div>
@@ -957,18 +1097,40 @@
             
             // Add click handlers to file items
             document.querySelectorAll('.file-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const name = item.dataset.name;
-                    const type = item.dataset.type;
-                    
-                    if (type === 'folder') {
-                        // Navigate to folder
-                        navigateToFolder(name);
-                    } else {
-                        // View file
-                        viewFile(name);
+                const name = item.dataset.name;
+                const type = item.dataset.type;
+                
+                // Main click handler for navigation
+                item.addEventListener('click', (e) => {
+                    // Don't trigger navigation if clicking on action buttons
+                    if (!e.target.closest('.file-actions-menu')) {
+                        if (type === 'folder') {
+                            // Navigate to folder
+                            navigateToFolder(name);
+                        } else {
+                            // View file
+                            viewFile(name);
+                        }
                     }
                 });
+                
+                // Edit file button
+                const editBtn = item.querySelector('.edit-file');
+                if (editBtn) {
+                    editBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        editFile(name);
+                    });
+                }
+                
+                // Delete button
+                const deleteBtn = item.querySelector('.delete-item');
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        confirmDeleteItem(name, type);
+                    });
+                }
             });
         }
 
@@ -976,7 +1138,7 @@
         function navigateToFolder(folderName) {
             currentPath.push(folderName);
             updateBreadcrumb();
-            renderFiles(getCurrentDirectory());
+            loadFiles();
         }
 
         // View a file
@@ -985,9 +1147,25 @@
             const file = currentDir[fileName];
             
             if (file && file.type === 'file') {
+                // In a real implementation, you would open the file in an editor or display it
                 showToast(`Viewing ${fileName}: ${file.content.substring(0, 50)}${file.content.length > 50 ? '...' : ''}`, 'info');
             } else {
                 showToast(`Cannot view ${fileName}`, 'error');
+            }
+        }
+
+        // Edit a file
+        function editFile(fileName) {
+            const currentDir = getCurrentDirectory();
+            const file = currentDir[fileName];
+            
+            if (file && file.type === 'file') {
+                currentFileToEdit = fileName;
+                document.getElementById('edit-file-name').value = fileName;
+                document.getElementById('edit-file-content').value = file.content;
+                editFileModal.classList.add('active');
+            } else {
+                showToast(`Cannot edit ${fileName}`, 'error');
             }
         }
 
@@ -998,12 +1176,12 @@
             // Add root
             const rootItem = document.createElement('span');
             rootItem.className = 'breadcrumb-item';
-            rootItem.textContent = projectData.name;
+            rootItem.textContent = repoName.textContent;
             rootItem.dataset.path = '';
             rootItem.addEventListener('click', () => {
                 currentPath = [];
                 updateBreadcrumb();
-                renderFiles(getCurrentDirectory());
+                loadFiles();
             });
             breadcrumb.appendChild(rootItem);
             
@@ -1023,7 +1201,7 @@
                     return () => {
                         currentPath = currentPath.slice(0, index + 1);
                         updateBreadcrumb();
-                        renderFiles(getCurrentDirectory());
+                        loadFiles();
                     };
                 })(i));
                 
@@ -1031,8 +1209,9 @@
             }
         }
 
-        // Add file to current directory
-        function addFileToCurrentDirectory(fileName, content) {
+        // Create a new file
+        function createFile(fileName, content) {
+            // In a real implementation, you would send this to your backend
             const currentDir = getCurrentDirectory();
             
             // Check if file already exists
@@ -1047,11 +1226,33 @@
                 lastModified: new Date().toISOString().replace('T', ' ').substring(0, 19)
             };
             
-            renderFiles(getCurrentDirectory());
+            loadFiles();
+            showToast(`File "${fileName}" created successfully`, 'success');
         }
 
-        // Add folder to current directory
-        function addFolderToCurrentDirectory(folderName) {
+        // Update a file
+        function updateFile(oldName, newName, content) {
+            // In a real implementation, you would send this to your backend
+            const currentDir = getCurrentDirectory();
+            
+            // If the name changed, delete the old file and create a new one
+            if (oldName !== newName) {
+                delete currentDir[oldName];
+            }
+            
+            currentDir[newName] = {
+                type: 'file',
+                content: content,
+                lastModified: new Date().toISOString().replace('T', ' ').substring(0, 19)
+            };
+            
+            loadFiles();
+            showToast(`File "${newName}" updated successfully`, 'success');
+        }
+
+        // Create a new folder
+        function createFolder(folderName) {
+            // In a real implementation, you would send this to your backend
             const currentDir = getCurrentDirectory();
             
             // Check if folder already exists
@@ -1066,7 +1267,42 @@
                 lastModified: new Date().toISOString().replace('T', ' ').substring(0, 19)
             };
             
-            renderFiles(getCurrentDirectory());
+            loadFiles();
+            showToast(`Folder "${folderName}" created successfully`, 'success');
+        }
+
+        // Upload a file
+        function uploadFile(file) {
+            // In a real implementation, you would upload the file to your backend
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const content = e.target.result;
+                createFile(file.name, content);
+            };
+            
+            reader.readAsText(file);
+        }
+
+        // Confirm deletion of an item
+        function confirmDeleteItem(name, type) {
+            currentItemToDelete = { name, type };
+            deleteMessage.textContent = `Are you sure you want to delete ${type === 'folder' ? 'the folder' : 'the file'} "${name}"? This action cannot be undone.`;
+            deleteModal.classList.add('active');
+        }
+
+        // Delete an item
+        function deleteItem(item) {
+            // In a real implementation, you would send this to your backend
+            const currentDir = getCurrentDirectory();
+            
+            if (currentDir[item.name]) {
+                delete currentDir[item.name];
+                loadFiles();
+                showToast(`${item.type === 'folder' ? 'Folder' : 'File'} "${item.name}" deleted successfully`, 'success');
+            } else {
+                showToast(`Failed to delete ${item.type} "${item.name}"`, 'error');
+            }
         }
 
         // Handle selected files
