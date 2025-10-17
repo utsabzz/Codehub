@@ -1,3 +1,444 @@
+<?php
+session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id'])) {
+    header('Location: index.html');
+    exit;
+}
+
+// Handle API requests
+if (isset($_GET['action'])) {
+    handleApiRequest();
+    exit;
+}
+
+// Include database connection
+require_once 'db_connection.php';
+
+// Get repository ID from URL
+ $repoId = $_GET['id'] ?? null;
+
+if (!$repoId) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+// Get repository information
+ $sql = "SELECT * FROM repositories WHERE id = ?";
+ $stmt = $conn->prepare($sql);
+ $stmt->bind_param("i", $repoId);
+ $stmt->execute();
+ $result = $stmt->get_result();
+
+if ($result->num_rows === 0) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+ $repo = $result->fetch_assoc();
+
+// Get user information
+ $user_id = $_SESSION['user_id'];
+ $user_sql = "SELECT id, username, email FROM users WHERE id = ?";
+ $user_stmt = $conn->prepare($user_sql);
+ $user_stmt->bind_param("i", $user_id);
+ $user_stmt->execute();
+ $user_result = $user_stmt->get_result();
+ $user = $user_result->fetch_assoc();
+
+// Handle form submissions
+ $error = '';
+ $success = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    
+    switch ($action) {
+        case 'create_file':
+            $path = $_POST['path'] ?? '';
+            $fileName = $_POST['file_name'] ?? '';
+            $content = $_POST['content'] ?? '';
+            
+            $result = createFile($repoId, $path, $fileName, $content);
+            echo json_encode($result);
+            exit;
+            
+        case 'update_file':
+            $oldPath = $_POST['old_path'] ?? '';
+            $newName = $_POST['new_name'] ?? '';
+            $content = $_POST['content'] ?? '';
+            
+            $result = updateFile($repoId, $oldPath, $newName, $content);
+            echo json_encode($result);
+            exit;
+            
+        case 'create_folder':
+            $path = $_POST['path'] ?? '';
+            $folderName = $_POST['folder_name'] ?? '';
+            
+            $result = createFolder($repoId, $path, $folderName);
+            echo json_encode($result);
+            exit;
+            
+        case 'upload_files':
+            $path = $_POST['path'] ?? '';
+            
+            $result = uploadFiles($repoId, $path);
+            echo json_encode($result);
+            exit;
+            
+        case 'delete_item':
+            $path = $_POST['path'] ?? '';
+            $type = $_POST['type'] ?? '';
+            
+            $result = deleteItem($repoId, $path, $type);
+            echo json_encode($result);
+            exit;
+    }
+}
+
+// API request handler
+function handleApiRequest() {
+    global $conn;
+    
+    $action = $_GET['action'];
+    $repoId = $_GET['repo_id'] ?? null;
+    
+    if (!$repoId) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Repository ID is required']);
+        exit;
+    }
+    
+    switch ($action) {
+        case 'get_repo_data':
+            // Get repository information
+            $sql = "SELECT * FROM repositories WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("i", $repoId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Repository not found']);
+                exit;
+            }
+            
+            $repo = $result->fetch_assoc();
+            echo json_encode($repo);
+            break;
+            
+        case 'get_repo_files':
+            // Get files in a directory
+            $path = $_GET['path'] ?? '';
+            
+            // Get repository path
+            $sql = "SELECT path FROM repositories WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("i", $repoId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Repository not found']);
+                exit;
+            }
+            
+            $repo = $result->fetch_assoc();
+            $repoPath = $repo['path'];
+            
+            // Build full path
+            $basePath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repoPath;
+            if (!empty($path)) {
+                $basePath .= '/' . $path;
+            }
+            
+            $files = [];
+            
+            if (is_dir($basePath)) {
+                $iterator = new DirectoryIterator($basePath);
+                foreach ($iterator as $item) {
+                    if ($item->isDot()) continue;
+                    
+                    $files[] = [
+                        'name' => $item->getFilename(),
+                        'path' => (!empty($path) ? $path . '/' : '') . $item->getFilename(),
+                        'type' => $item->isDir() ? 'folder' : 'file',
+                        'modified' => date('Y-m-d H:i:s', $item->getMTime())
+                    ];
+                }
+            }
+            
+            echo json_encode($files);
+            break;
+            
+        case 'get_file_content':
+            // Get file content
+            $filePath = $_GET['file'] ?? '';
+            
+            // Get repository path
+            $sql = "SELECT path FROM repositories WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("i", $repoId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                http_response_code(404);
+                echo json_encode(['error' => 'Repository not found']);
+                exit;
+            }
+            
+            $repo = $result->fetch_assoc();
+            $repoPath = $repo['path'];
+            
+            // Build full path
+            $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repoPath . '/' . $filePath;
+            
+            if (!file_exists($fullPath) || is_dir($fullPath)) {
+                http_response_code(404);
+                echo json_encode(['error' => 'File not found']);
+                exit;
+            }
+            
+            $content = file_get_contents($fullPath);
+            echo json_encode(['content' => $content]);
+            break;
+            
+        default:
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid action']);
+            break;
+    }
+}
+
+// Create a new file
+function createFile($repoId, $path, $fileName, $content) {
+    global $conn;
+    
+    // Get repository path
+    $sql = "SELECT path FROM repositories WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $repoId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        return ['success' => false, 'message' => 'Repository not found'];
+    }
+    
+    $repo = $result->fetch_assoc();
+    $repoPath = $repo['path'];
+    
+    // Build full path
+    $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repoPath;
+    if (!empty($path)) {
+        $fullPath .= '/' . $path;
+    }
+    
+    // Create directory if it doesn't exist
+    if (!is_dir($fullPath)) {
+        mkdir($fullPath, 0755, true);
+    }
+    
+    $filePath = $fullPath . '/' . $fileName;
+    
+    if (file_put_contents($filePath, $content)) {
+        return ['success' => true];
+    } else {
+        return ['success' => false, 'message' => 'Failed to create file'];
+    }
+}
+
+// Update an existing file
+function updateFile($repoId, $oldPath, $newName, $content) {
+    global $conn;
+    
+    // Get repository path
+    $sql = "SELECT path FROM repositories WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $repoId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        return ['success' => false, 'message' => 'Repository not found'];
+    }
+    
+    $repo = $result->fetch_assoc();
+    $repoPath = $repo['path'];
+    
+    // Build full path
+    $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repoPath . '/' . $oldPath;
+    
+    if (!file_exists($fullPath) || is_dir($fullPath)) {
+        return ['success' => false, 'message' => 'File not found'];
+    }
+    
+    // Extract directory and filename
+    $dir = dirname($fullPath);
+    $newFullPath = $dir . '/' . $newName;
+    
+    // Rename file if name changed
+    if ($oldPath !== $newName) {
+        if (!rename($fullPath, $newFullPath)) {
+            return ['success' => false, 'message' => 'Failed to rename file'];
+        }
+        $fullPath = $newFullPath;
+    }
+    
+    // Update content
+    if (file_put_contents($fullPath, $content)) {
+        return ['success' => true];
+    } else {
+        return ['success' => false, 'message' => 'Failed to update file'];
+    }
+}
+
+// Create a new folder
+function createFolder($repoId, $path, $folderName) {
+    global $conn;
+    
+    // Get repository path
+    $sql = "SELECT path FROM repositories WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $repoId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        return ['success' => false, 'message' => 'Repository not found'];
+    }
+    
+    $repo = $result->fetch_assoc();
+    $repoPath = $repo['path'];
+    
+    // Build full path
+    $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repoPath;
+    if (!empty($path)) {
+        $fullPath .= '/' . $path;
+    }
+    
+    $folderPath = $fullPath . '/' . $folderName;
+    
+    if (mkdir($folderPath, 0755, true)) {
+        return ['success' => true];
+    } else {
+        return ['success' => false, 'message' => 'Failed to create folder'];
+    }
+}
+
+// Upload files
+function uploadFiles($repoId, $path) {
+    global $conn;
+    
+    // Get repository path
+    $sql = "SELECT path FROM repositories WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $repoId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        return ['success' => false, 'message' => 'Repository not found'];
+    }
+    
+    $repo = $result->fetch_assoc();
+    $repoPath = $repo['path'];
+    
+    // Build full path
+    $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repoPath;
+    if (!empty($path)) {
+        $fullPath .= '/' . $path;
+    }
+    
+    // Create directory if it doesn't exist
+    if (!is_dir($fullPath)) {
+        mkdir($fullPath, 0755, true);
+    }
+    
+    $uploadedFiles = [];
+    
+    foreach ($_FILES['files']['tmp_name'] as $key => $tmpName) {
+        $fileName = $_FILES['files']['name'][$key];
+        $fileError = $_FILES['files']['error'][$key];
+        
+        if ($fileError === UPLOAD_ERR_OK) {
+            $destination = $fullPath . '/' . $fileName;
+            
+            if (move_uploaded_file($tmpName, $destination)) {
+                $uploadedFiles[] = $fileName;
+            }
+        }
+    }
+    
+    if (count($uploadedFiles) > 0) {
+        return ['success' => true, 'files' => $uploadedFiles];
+    } else {
+        return ['success' => false, 'message' => 'Failed to upload files'];
+    }
+}
+
+// Delete files or folders
+function deleteItem($repoId, $path, $type) {
+    global $conn;
+    
+    // Get repository path
+    $sql = "SELECT path FROM repositories WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $repoId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        return ['success' => false, 'message' => 'Repository not found'];
+    }
+    
+    $repo = $result->fetch_assoc();
+    $repoPath = $repo['path'];
+    
+    // Build full path
+    $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/' . $repoPath . '/' . $path;
+    
+    if (!file_exists($fullPath)) {
+        return ['success' => false, 'message' => 'Item not found'];
+    }
+    
+    if ($type === 'folder') {
+        // Recursively delete directory
+        function deleteDirectory($dir) {
+            if (!is_dir($dir)) {
+                return false;
+            }
+            
+            $files = array_diff(scandir($dir), ['.', '..']);
+            foreach ($files as $file) {
+                $path = $dir . '/' . $file;
+                is_dir($path) ? deleteDirectory($path) : unlink($path);
+            }
+            
+            return rmdir($dir);
+        }
+        
+        if (deleteDirectory($fullPath)) {
+            return ['success' => true];
+        } else {
+            return ['success' => false, 'message' => 'Failed to delete folder'];
+        }
+    } else {
+        // Delete file
+        if (unlink($fullPath)) {
+            return ['success' => true];
+        } else {
+            return ['success' => false, 'message' => 'Failed to delete file'];
+        }
+    }
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -519,12 +960,12 @@
         <div class="container">
             <div class="header-content">
                 <div class="repo-info">
-                    <span class="repo-name" id="repo-name">file-explorer</span>
-                    <span class="repo-visibility" id="repo-visibility">Public</span>
+                    <span class="repo-name" id="repo-name"><?php echo htmlspecialchars($repo['name']); ?></span>
+                    <span class="repo-visibility" id="repo-visibility"><?php echo ucfirst($repo['visibility']); ?></span>
                 </div>
                 <div class="repo-actions">
                     <button class="btn" id="branch-btn">
-                        <i class="fas fa-code-branch"></i> <span id="branch-name">main</span>
+                        <i class="fas fa-code-branch"></i> <span id="branch-name"><?php echo htmlspecialchars($repo['default_branch']); ?></span>
                     </button>
                     <button class="btn" id="code-btn">
                         <i class="fas fa-download"></i> Code
@@ -564,7 +1005,7 @@
         <div class="file-explorer">
             <div class="file-explorer-header">
                 <div class="breadcrumb" id="breadcrumb">
-                    <span class="breadcrumb-item" data-path="">file-explorer</span>
+                    <span class="breadcrumb-item" data-path=""><?php echo htmlspecialchars($repo['name']); ?></span>
                 </div>
                 <div class="file-actions">
                     <button class="btn" id="add-file-btn">
@@ -751,6 +1192,8 @@
         let selectedFiles = [];
         let currentFileToEdit = null;
         let currentItemToDelete = null;
+        let repoId = <?php echo $repoId; ?>;
+        let repoData = null;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -761,24 +1204,31 @@
 
         // Initialize project data
         function initializeProject() {
-            // Get repository data from URL parameters or use defaults
-            const urlParams = new URLSearchParams(window.location.search);
-            const repoId = urlParams.get('id');
-            
-            // In a real implementation, you would fetch this from your backend
-            const projectData = {
-                id: repoId || 1,
-                name: urlParams.get('name') || 'file-explorer',
-                visibility: urlParams.get('visibility') || 'public',
-                default_branch: urlParams.get('branch') || 'main'
-            };
-            
-            repoName.textContent = projectData.name;
-            repoVisibility.textContent = projectData.visibility.charAt(0).toUpperCase() + projectData.visibility.slice(1);
-            branchName.textContent = projectData.default_branch;
-            
-            // Update breadcrumb
-            updateBreadcrumb();
+            // Fetch repository data from backend
+            fetchRepoData(repoId);
+        }
+
+        // Fetch repository data from backend
+        async function fetchRepoData(repoId) {
+            try {
+                const response = await fetch(`?action=get_repo_data&repo_id=${repoId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch repository data');
+                }
+                
+                repoData = await response.json();
+                
+                // Update UI with repository data
+                repoName.textContent = repoData.name;
+                repoVisibility.textContent = repoData.visibility.charAt(0).toUpperCase() + repoData.visibility.slice(1);
+                branchName.textContent = repoData.default_branch;
+                
+                // Update breadcrumb
+                updateBreadcrumb();
+            } catch (error) {
+                console.error('Error fetching repository data:', error);
+                showToast('Failed to load repository data', 'error');
+            }
         }
 
         // Setup event listeners
@@ -855,7 +1305,7 @@
             });
 
             // Create new file
-            createNewFile.addEventListener('click', () => {
+            createNewFile.addEventListener('click', async () => {
                 const fileName = document.getElementById('new-file-name').value;
                 const fileContent = document.getElementById('new-file-content').value;
                 
@@ -864,17 +1314,50 @@
                     return;
                 }
                 
-                // Add file to current directory
-                createFile(fileName, fileContent);
+                // Show loading state
+                createNewFile.disabled = true;
+                createNewFile.innerHTML = '<span class="spinner"></span> Creating...';
                 
-                // Reset form and close modal
-                document.getElementById('new-file-name').value = '';
-                document.getElementById('new-file-content').value = '';
-                addFileModal.classList.remove('active');
+                // Add file to current directory
+                const pathString = currentPath.length > 0 ? currentPath.join('/') : '';
+                
+                const formData = new FormData();
+                formData.append('action', 'create_file');
+                formData.append('repo_id', repoId);
+                formData.append('path', pathString);
+                formData.append('file_name', fileName);
+                formData.append('content', fileContent);
+                
+                try {
+                    const response = await fetch('', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        loadFiles();
+                        showToast(`File "${fileName}" created successfully`, 'success');
+                        
+                        // Reset form and close modal
+                        document.getElementById('new-file-name').value = '';
+                        document.getElementById('new-file-content').value = '';
+                        addFileModal.classList.remove('active');
+                    } else {
+                        showToast(data.message || 'Failed to create file', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error creating file:', error);
+                    showToast('Failed to create file', 'error');
+                } finally {
+                    createNewFile.disabled = false;
+                    createNewFile.innerHTML = 'Create new file';
+                }
             });
 
             // Save edited file
-            saveFile.addEventListener('click', () => {
+            saveFile.addEventListener('click', async () => {
                 const fileName = document.getElementById('edit-file-name').value;
                 const fileContent = document.getElementById('edit-file-content').value;
                 
@@ -883,18 +1366,49 @@
                     return;
                 }
                 
-                // Update file
-                updateFile(currentFileToEdit, fileName, fileContent);
+                // Show loading state
+                saveFile.disabled = true;
+                saveFile.innerHTML = '<span class="spinner"></span> Saving...';
                 
-                // Reset form and close modal
-                document.getElementById('edit-file-name').value = '';
-                document.getElementById('edit-file-content').value = '';
-                editFileModal.classList.remove('active');
-                currentFileToEdit = null;
+                // Update file
+                const formData = new FormData();
+                formData.append('action', 'update_file');
+                formData.append('repo_id', repoId);
+                formData.append('old_path', currentFileToEdit);
+                formData.append('new_name', fileName);
+                formData.append('content', fileContent);
+                
+                try {
+                    const response = await fetch('', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        loadFiles();
+                        showToast(`File "${fileName}" updated successfully`, 'success');
+                        
+                        // Reset form and close modal
+                        document.getElementById('edit-file-name').value = '';
+                        document.getElementById('edit-file-content').value = '';
+                        editFileModal.classList.remove('active');
+                        currentFileToEdit = null;
+                    } else {
+                        showToast(data.message || 'Failed to update file', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error updating file:', error);
+                    showToast('Failed to update file', 'error');
+                } finally {
+                    saveFile.disabled = false;
+                    saveFile.innerHTML = 'Save changes';
+                }
             });
 
             // Create new folder
-            createNewFolder.addEventListener('click', () => {
+            createNewFolder.addEventListener('click', async () => {
                 const folderName = document.getElementById('new-folder-name').value;
                 
                 if (!folderName) {
@@ -902,12 +1416,44 @@
                     return;
                 }
                 
-                // Add folder to current directory
-                createFolder(folderName);
+                // Show loading state
+                createNewFolder.disabled = true;
+                createNewFolder.innerHTML = '<span class="spinner"></span> Creating...';
                 
-                // Reset form and close modal
-                document.getElementById('new-folder-name').value = '';
-                addFolderModal.classList.remove('active');
+                // Add folder to current directory
+                const pathString = currentPath.length > 0 ? currentPath.join('/') : '';
+                
+                const formData = new FormData();
+                formData.append('action', 'create_folder');
+                formData.append('repo_id', repoId);
+                formData.append('path', pathString);
+                formData.append('folder_name', folderName);
+                
+                try {
+                    const response = await fetch('', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        loadFiles();
+                        showToast(`Folder "${folderName}" created successfully`, 'success');
+                        
+                        // Reset form and close modal
+                        document.getElementById('new-folder-name').value = '';
+                        addFolderModal.classList.remove('active');
+                    } else {
+                        showToast(data.message || 'Failed to create folder', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error creating folder:', error);
+                    showToast('Failed to create folder', 'error');
+                } finally {
+                    createNewFolder.disabled = false;
+                    createNewFolder.innerHTML = 'Create folder';
+                }
             });
 
             // File upload
@@ -937,7 +1483,7 @@
             });
 
             // Upload files
-            uploadFiles.addEventListener('click', () => {
+            uploadFiles.addEventListener('click', async () => {
                 if (selectedFiles.length === 0) {
                     showToast('Please select files to upload', 'error');
                     return;
@@ -946,28 +1492,82 @@
                 // Show loading state
                 uploadText.textContent = 'Uploading...';
                 uploadSpinner.style.display = 'inline-block';
+                uploadFiles.disabled = true;
                 
-                // Simulate upload
-                setTimeout(() => {
-                    // Add files to current directory
-                    selectedFiles.forEach(file => {
-                        uploadFile(file);
+                // Upload files
+                const pathString = currentPath.length > 0 ? currentPath.join('/') : '';
+                const formData = new FormData();
+                
+                formData.append('action', 'upload_files');
+                formData.append('repo_id', repoId);
+                formData.append('path', pathString);
+                
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    formData.append('files[]', selectedFiles[i]);
+                }
+                
+                try {
+                    const response = await fetch('', {
+                        method: 'POST',
+                        body: formData
                     });
                     
-                    // Reset and close modal
-                    resetFileUpload();
-                    uploadModal.classList.remove('active');
+                    const data = await response.json();
                     
-                    showToast(`${selectedFiles.length} file(s) uploaded successfully`, 'success');
-                }, 1500);
+                    if (data.success) {
+                        loadFiles();
+                        resetFileUpload();
+                        uploadModal.classList.remove('active');
+                        showToast(`${selectedFiles.length} file(s) uploaded successfully`, 'success');
+                    } else {
+                        showToast(data.message || 'Failed to upload files', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error uploading files:', error);
+                    showToast('Failed to upload files', 'error');
+                } finally {
+                    uploadText.textContent = 'Upload files';
+                    uploadSpinner.style.display = 'none';
+                    uploadFiles.disabled = false;
+                }
             });
 
             // Confirm delete
-            confirmDelete.addEventListener('click', () => {
+            confirmDelete.addEventListener('click', async () => {
                 if (currentItemToDelete) {
-                    deleteItem(currentItemToDelete);
-                    deleteModal.classList.remove('active');
-                    currentItemToDelete = null;
+                    // Show loading state
+                    confirmDelete.disabled = true;
+                    confirmDelete.innerHTML = '<span class="spinner"></span> Deleting...';
+                    
+                    const formData = new FormData();
+                    formData.append('action', 'delete_item');
+                    formData.append('repo_id', repoId);
+                    formData.append('path', currentItemToDelete.path);
+                    formData.append('type', currentItemToDelete.type);
+                    
+                    try {
+                        const response = await fetch('', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            loadFiles();
+                            showToast(`${currentItemToDelete.type === 'folder' ? 'Folder' : 'File'} "${currentItemToDelete.name}" deleted successfully`, 'success');
+                            deleteModal.classList.remove('active');
+                            currentItemToDelete = null;
+                        } else {
+                            showToast(data.message || `Failed to delete ${currentItemToDelete.type}`, 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error deleting item:', error);
+                        showToast(`Failed to delete ${currentItemToDelete.type}`, 'error');
+                    } finally {
+                        confirmDelete.disabled = false;
+                        confirmDelete.innerHTML = 'Delete';
+                    }
                 }
             });
 
@@ -983,85 +1583,29 @@
         }
 
         // Load files from server
-        function loadFiles() {
-            // In a real implementation, you would fetch this from your backend
-            // For now, we'll use a mock API
-            const currentDir = getCurrentDirectory();
-            renderFiles(currentDir);
-        }
-
-        // Get current directory based on path
-        function getCurrentDirectory() {
-            // In a real implementation, you would fetch this from your backend
-            // For now, we'll use a mock file system
-            const mockFileSystem = {
-                "README.md": { type: "file", content: "# File Explorer\n\nA GitHub-style file explorer implementation.", lastModified: "2023-10-20 14:45:00" },
-                "src": {
-                    type: "folder",
-                    children: {
-                        "index.js": { type: "file", content: "console.log('Hello World');", lastModified: "2023-10-19 11:20:00" },
-                        "styles.css": { type: "file", content: "body { margin: 0; }", lastModified: "2023-10-18 09:15:00" },
-                        "components": {
-                            type: "folder",
-                            children: {
-                                "FileItem.js": { type: "file", content: "// File item component", lastModified: "2023-10-17 16:30:00" },
-                                "Modal.js": { type: "file", content: "// Modal component", lastModified: "2023-10-16 13:45:00" }
-                            },
-                            lastModified: "2023-10-17 16:30:00"
-                        }
-                    },
-                    lastModified: "2023-10-19 11:20:00"
-                },
-                "package.json": { type: "file", content: '{\n  "name": "file-explorer",\n  "version": "1.0.0"\n}', lastModified: "2023-10-15 12:10:00" },
-                ".gitignore": { type: "file", content: "node_modules/\n.env", lastModified: "2023-10-14 08:05:00" },
-                "docs": {
-                    type: "folder",
-                    children: {
-                        "README.md": { type: "file", content: "# Documentation", lastModified: "2023-10-13 15:25:00" },
-                        "api.md": { type: "file", content: "# API Reference", lastModified: "2023-10-12 10:40:00" }
-                    },
-                    lastModified: "2023-10-13 15:25:00"
-                },
-                "LICENSE": { type: "file", content: "MIT License", lastModified: "2023-10-10 14:20:00" }
-            };
-
-            let currentDir = mockFileSystem;
+        async function loadFiles() {
+            if (!repoId) return;
             
-            for (const segment of currentPath) {
-                if (currentDir[segment] && currentDir[segment].type === 'folder') {
-                    currentDir = currentDir[segment].children;
-                } else {
-                    // Path doesn't exist, reset to root
-                    currentPath = [];
-                    return mockFileSystem;
+            try {
+                // Build the path string
+                const pathString = currentPath.length > 0 ? currentPath.join('/') : '';
+                
+                const response = await fetch(`?action=get_repo_files&repo_id=${repoId}&path=${encodeURIComponent(pathString)}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load files');
                 }
+                
+                const files = await response.json();
+                renderFiles(files);
+            } catch (error) {
+                console.error('Error loading files:', error);
+                showToast('Failed to load files', 'error');
             }
-            
-            return currentDir;
         }
 
         // Render files in current directory
-        function renderFiles(directory) {
-            const files = Object.keys(directory)
-                .map(name => {
-                    const item = directory[name];
-                    return {
-                        name,
-                        type: item.type,
-                        icon: item.type === 'folder' ? 'folder' : 
-                              name.endsWith('.md') ? 'markdown' : 'file',
-                        lastModified: item.lastModified || 'Unknown'
-                    };
-                })
-                .sort((a, b) => {
-                    // Folders first, then files
-                    if (a.type === 'folder' && b.type !== 'folder') return -1;
-                    if (a.type !== 'folder' && b.type === 'folder') return 1;
-                    // Alphabetical order
-                    return a.name.localeCompare(b.name);
-                });
-            
-            if (files.length === 0) {
+        function renderFiles(files) {
+            if (!files || files.length === 0) {
                 fileList.innerHTML = `
                     <div class="empty-state">
                         <div class="empty-state-icon">
@@ -1077,13 +1621,24 @@
             }
             
             fileList.innerHTML = files.map(file => `
-                <div class="file-item" data-name="${file.name}" data-type="${file.type}">
-                    <i class="fas ${file.type === 'folder' ? 'fa-folder' : file.icon === 'markdown' ? 'fa-file-alt' : 'fa-file'} file-icon ${file.icon}"></i>
+                <div class="file-item" data-name="${file.name}" data-type="${file.type}" data-path="${file.path}">
+                    <i class="fas ${file.type === 'folder' ? 'fa-folder' : 
+                              file.name.endsWith('.md') ? 'fa-file-alt' : 
+                              file.name.endsWith('.php') ? 'fa-file-code' :
+                              file.name.endsWith('.js') ? 'fa-file-code' :
+                              file.name.endsWith('.css') ? 'fa-file-code' :
+                              file.name.endsWith('.html') ? 'fa-file-code' :
+                              file.name.endsWith('.json') ? 'fa-file-code' :
+                              'fa-file'} file-icon ${file.type === 'folder' ? 'folder' : 
+                              file.name.endsWith('.md') ? 'markdown' : 'file'}"></i>
                     <span class="file-name">${file.name}</span>
                     <div class="file-actions-menu">
                         ${file.type === 'file' ? `
                             <button class="file-action-btn edit-file" title="Edit file">
                                 <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="file-action-btn view-file" title="View file">
+                                <i class="fas fa-eye"></i>
                             </button>
                         ` : ''}
                         <button class="file-action-btn delete-item" title="Delete">
@@ -1091,7 +1646,7 @@
                         </button>
                     </div>
                     <span class="file-message">Latest commit</span>
-                    <span class="file-time">${formatTimeAgo(file.lastModified)}</span>
+                    <span class="file-time">${formatTimeAgo(file.modified)}</span>
                 </div>
             `).join('');
             
@@ -1099,6 +1654,7 @@
             document.querySelectorAll('.file-item').forEach(item => {
                 const name = item.dataset.name;
                 const type = item.dataset.type;
+                const path = item.dataset.path;
                 
                 // Main click handler for navigation
                 item.addEventListener('click', (e) => {
@@ -1109,7 +1665,7 @@
                             navigateToFolder(name);
                         } else {
                             // View file
-                            viewFile(name);
+                            viewFile(path, name);
                         }
                     }
                 });
@@ -1119,7 +1675,16 @@
                 if (editBtn) {
                     editBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        editFile(name);
+                        editFile(path, name);
+                    });
+                }
+                
+                // View file button
+                const viewBtn = item.querySelector('.view-file');
+                if (viewBtn) {
+                    viewBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        viewFile(path, name);
                     });
                 }
                 
@@ -1128,7 +1693,7 @@
                 if (deleteBtn) {
                     deleteBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        confirmDeleteItem(name, type);
+                        confirmDeleteItem(name, type, path);
                     });
                 }
             });
@@ -1142,30 +1707,28 @@
         }
 
         // View a file
-        function viewFile(fileName) {
-            const currentDir = getCurrentDirectory();
-            const file = currentDir[fileName];
-            
-            if (file && file.type === 'file') {
-                // In a real implementation, you would open the file in an editor or display it
-                showToast(`Viewing ${fileName}: ${file.content.substring(0, 50)}${file.content.length > 50 ? '...' : ''}`, 'info');
-            } else {
-                showToast(`Cannot view ${fileName}`, 'error');
-            }
+        function viewFile(filePath, fileName) {
+            // Open the file in the editor
+            window.location.href = `editor.php?id=${repoId}&file=${encodeURIComponent(filePath)}`;
         }
 
         // Edit a file
-        function editFile(fileName) {
-            const currentDir = getCurrentDirectory();
-            const file = currentDir[fileName];
-            
-            if (file && file.type === 'file') {
-                currentFileToEdit = fileName;
+        async function editFile(filePath, fileName) {
+            try {
+                const response = await fetch(`?action=get_file_content&repo_id=${repoId}&file=${encodeURIComponent(filePath)}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load file content');
+                }
+                
+                const data = await response.json();
+                
+                currentFileToEdit = filePath;
                 document.getElementById('edit-file-name').value = fileName;
-                document.getElementById('edit-file-content').value = file.content;
+                document.getElementById('edit-file-content').value = data.content;
                 editFileModal.classList.add('active');
-            } else {
-                showToast(`Cannot edit ${fileName}`, 'error');
+            } catch (error) {
+                console.error('Error loading file content:', error);
+                showToast('Failed to load file content', 'error');
             }
         }
 
@@ -1176,7 +1739,7 @@
             // Add root
             const rootItem = document.createElement('span');
             rootItem.className = 'breadcrumb-item';
-            rootItem.textContent = repoName.textContent;
+            rootItem.textContent = repoName ? repoName.textContent : 'Repository';
             rootItem.dataset.path = '';
             rootItem.addEventListener('click', () => {
                 currentPath = [];
@@ -1209,102 +1772,6 @@
             }
         }
 
-        // Create a new file
-        function createFile(fileName, content) {
-            // In a real implementation, you would send this to your backend
-            const currentDir = getCurrentDirectory();
-            
-            // Check if file already exists
-            if (currentDir[fileName]) {
-                showToast(`File "${fileName}" already exists`, 'error');
-                return;
-            }
-            
-            currentDir[fileName] = {
-                type: 'file',
-                content: content,
-                lastModified: new Date().toISOString().replace('T', ' ').substring(0, 19)
-            };
-            
-            loadFiles();
-            showToast(`File "${fileName}" created successfully`, 'success');
-        }
-
-        // Update a file
-        function updateFile(oldName, newName, content) {
-            // In a real implementation, you would send this to your backend
-            const currentDir = getCurrentDirectory();
-            
-            // If the name changed, delete the old file and create a new one
-            if (oldName !== newName) {
-                delete currentDir[oldName];
-            }
-            
-            currentDir[newName] = {
-                type: 'file',
-                content: content,
-                lastModified: new Date().toISOString().replace('T', ' ').substring(0, 19)
-            };
-            
-            loadFiles();
-            showToast(`File "${newName}" updated successfully`, 'success');
-        }
-
-        // Create a new folder
-        function createFolder(folderName) {
-            // In a real implementation, you would send this to your backend
-            const currentDir = getCurrentDirectory();
-            
-            // Check if folder already exists
-            if (currentDir[folderName]) {
-                showToast(`Folder "${folderName}" already exists`, 'error');
-                return;
-            }
-            
-            currentDir[folderName] = {
-                type: 'folder',
-                children: {},
-                lastModified: new Date().toISOString().replace('T', ' ').substring(0, 19)
-            };
-            
-            loadFiles();
-            showToast(`Folder "${folderName}" created successfully`, 'success');
-        }
-
-        // Upload a file
-        function uploadFile(file) {
-            // In a real implementation, you would upload the file to your backend
-            const reader = new FileReader();
-            
-            reader.onload = function(e) {
-                const content = e.target.result;
-                createFile(file.name, content);
-            };
-            
-            reader.readAsText(file);
-        }
-
-        // Confirm deletion of an item
-        function confirmDeleteItem(name, type) {
-            currentItemToDelete = { name, type };
-            deleteMessage.textContent = `Are you sure you want to delete ${type === 'folder' ? 'the folder' : 'the file'} "${name}"? This action cannot be undone.`;
-            deleteModal.classList.add('active');
-        }
-
-        // Delete an item
-        function deleteItem(item) {
-            // In a real implementation, you would send this to your backend
-            const currentDir = getCurrentDirectory();
-            
-            if (currentDir[item.name]) {
-                delete currentDir[item.name];
-                loadFiles();
-                showToast(`${item.type === 'folder' ? 'Folder' : 'File'} "${item.name}" deleted successfully`, 'success');
-            } else {
-                showToast(`Failed to delete ${item.type} "${item.name}"`, 'error');
-            }
-        }
-
         // Handle selected files
         function handleFiles(files) {
             selectedFiles = Array.from(files);
@@ -1316,11 +1783,43 @@
             
             fileListPreview.innerHTML = selectedFiles.map(file => `
                 <div class="file-preview-item">
-                    <i class="fas ${file.name.endsWith('.md') ? 'fa-file-alt' : 'fa-file'} file-preview-icon"></i>
+                    <i class="fas ${getFileIcon(file.name)} file-preview-icon"></i>
                     <span class="file-preview-name">${file.name}</span>
                     <span class="file-preview-size">${formatFileSize(file.size)}</span>
                 </div>
             `).join('');
+        }
+
+        // Get file icon based on file extension
+        function getFileIcon(fileName) {
+            const extension = fileName.split('.').pop().toLowerCase();
+            const iconMap = {
+                'md': 'fa-file-alt',
+                'php': 'fa-file-code',
+                'js': 'fa-file-code',
+                'css': 'fa-file-code',
+                'html': 'fa-file-code',
+                'json': 'fa-file-code',
+                'py': 'fa-file-code',
+                'java': 'fa-file-code',
+                'cpp': 'fa-file-code',
+                'c': 'fa-file-code',
+                'h': 'fa-file-code',
+                'txt': 'fa-file-alt',
+                'pdf': 'fa-file-pdf',
+                'zip': 'fa-file-archive',
+                'jpg': 'fa-file-image',
+                'jpeg': 'fa-file-image',
+                'png': 'fa-file-image',
+                'gif': 'fa-file-image',
+                'svg': 'fa-file-image',
+                'mp3': 'fa-file-audio',
+                'mp4': 'fa-file-video',
+                'avi': 'fa-file-video',
+                'mov': 'fa-file-video'
+            };
+            
+            return iconMap[extension] || 'fa-file';
         }
 
         // Reset file upload
@@ -1330,6 +1829,13 @@
             fileListPreview.innerHTML = '';
             uploadText.textContent = 'Upload files';
             uploadSpinner.style.display = 'none';
+        }
+
+        // Confirm deletion of an item
+        function confirmDeleteItem(name, type, path) {
+            currentItemToDelete = { name, type, path };
+            deleteMessage.textContent = `Are you sure you want to delete ${type === 'folder' ? 'the folder' : 'the file'} "${name}"? This action cannot be undone.`;
+            deleteModal.classList.add('active');
         }
 
         // Format file size

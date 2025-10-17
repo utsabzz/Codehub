@@ -58,22 +58,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "You already have a repository with that name.";
         } else {
             // Create repository directory
-            $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub/projects';
+            $base_path = $_SERVER['DOCUMENT_ROOT'] . '/CodeHub';
             $user_dir = $base_path . '/' . $username;
             $repo_dir = $user_dir . '/' . $repo_name;
             
             // Create directories if they don't exist
+            if (!is_dir($base_path)) {
+                mkdir($base_path, 0755, true);
+            }
+            
             if (!is_dir($user_dir)) {
                 mkdir($user_dir, 0755, true);
             }
             
             if (!is_dir($repo_dir)) {
                 if (mkdir($repo_dir, 0755, true)) {
+                    // FIXED: Store path as username/repo_name format
+                    $repo_path = $username . '/' . $repo_name;
+                    
                     // Insert repository into database
                     $insert_sql = "INSERT INTO repositories (name, path, description, owner_id, owner_username, visibility, default_branch) 
                                   VALUES (?, ?, ?, ?, ?, ?, ?)";
                     $insert_stmt = $conn->prepare($insert_sql);
-                    $repo_path = 'projects/' . $username . '/' . $repo_name;
                     $default_branch = 'main';
                     
                     $insert_stmt->bind_param("sssisss", $repo_name, $repo_path, $description, $user_id, $username, $visibility, $default_branch);
